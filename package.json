@@ -1,0 +1,25 @@
+{
+  "name": "create-lasereyes",
+  "version": "1.0.0",
+  "description": "Interactive setup for LaserEyes projects",
+  "bin": {
+    "create-lasereyes": "./dist/bin/script.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "postbuild": "node dist/bin/fix-shebang.js"
+  },
+  "dependencies": {
+    "inquirer": "^9.0.0"
+  },
+  "type": "module",
+  "devDependencies": {
+    "@omnisat/lasereyes": "^0.0.80",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "@types/inquirer": "^9.0.0",
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.0.0",
+    "typescript": "^5.0.0"
+  }
+}
