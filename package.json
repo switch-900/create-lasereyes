@@ -14,7 +14,7 @@
   },
   "type": "module",
   "devDependencies": {
-    "@omnisat/lasereyes": "^0.0.80",
+    "@omnisat/lasereyes": "latest",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "@types/inquirer": "^9.0.0",
