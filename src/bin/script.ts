@@ -40,11 +40,11 @@ async function copyTemplateFiles(projectPath: string) {
       },
       {
         source: "components/DefaultLayout.txt",
-        target: path.join(componentsDir, "DefaultLayout.tsx"),
+        target: path.join(targetDir, "components", "DefaultLayout.tsx"),
       },
       {
         source: "components/ConnectWallet.txt",
-        target: path.join(componentsDir, "ConnectWallet.tsx"),
+        target: path.join(targetDir, "components", "ConnectWallet.tsx"),
       },
     ];
 
