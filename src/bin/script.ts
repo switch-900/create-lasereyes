@@ -97,7 +97,7 @@ async function run() {
   // Check the selected framework and run the appropriate command
   if (framework === "Next.js") {
     console.log(`Running create-next-app for project: ${projectName}...`);
-    const createNextAppArgs = ["create-next-app@14.1.0", projectName];
+    const createNextAppArgs = ["create-next-app@14.2.3", projectName];
 
     // Add --typescript flag if TypeScript is selected
     if (language === "TypeScript") {
