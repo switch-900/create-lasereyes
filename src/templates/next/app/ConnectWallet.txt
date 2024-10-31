@@ -1,0 +1,26 @@
+/** @format */
+
+import { useLaserEyes, UNISAT } from "@omnisat/lasereyes";
+import { Button } from "./ui/button";
+
+export function ConnectWallet() {
+  const { connect, disconnect, connected, address } = useLaserEyes();
+
+  const handleClick = () => {
+    if (connected) {
+      disconnect();
+    } else {
+      connect(UNISAT);
+    }
+  };
+
+  return (
+    <Button onClick={handleClick} variant="outline" size="lg">
+      {!connected ? (
+        "Connect Wallet"
+      ) : (
+        <span className="truncate max-w-[200px]">{address}</span>
+      )}
+    </Button>
+  );
+}

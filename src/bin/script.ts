@@ -173,6 +173,71 @@ async function run() {
                 shadcnInstall.on("close", (shadcnCode) => {
                   if (shadcnCode === 0) {
                     console.log("Shadcn installed successfully!");
+
+                    // After successful Next.js project creation and shadcn installation
+                    const installShadcnButton = spawn(
+                      "npx",
+                      ["shadcn-ui@latest", "add", "button"],
+                      {
+                        cwd: projectPath,
+                        stdio: "inherit",
+                      }
+                    );
+
+                    installShadcnButton.on("close", (code) => {
+                      if (code === 0) {
+                        // Create components directory if it doesn't exist
+                        const componentsDir = path.join(
+                          projectPath,
+                          "app/components"
+                        );
+                        if (!fs.existsSync(componentsDir)) {
+                          fs.mkdirSync(componentsDir, { recursive: true });
+                        }
+
+                        // Move DefaultLayout.tsx and ConnectWallet.tsx to components folder
+                        fs.renameSync(
+                          path.join(projectPath, "app/DefaultLayout.tsx"),
+                          path.join(componentsDir, "DefaultLayout.tsx")
+                        );
+                        fs.renameSync(
+                          path.join(projectPath, "app/ConnectWallet.tsx"),
+                          path.join(componentsDir, "ConnectWallet.tsx")
+                        );
+
+                        // Update import in ConnectWallet.tsx to use the correct button path
+                        const connectWalletPath = path.join(
+                          componentsDir,
+                          "ConnectWallet.tsx"
+                        );
+                        let connectWalletContent = fs.readFileSync(
+                          connectWalletPath,
+                          "utf8"
+                        );
+                        connectWalletContent = connectWalletContent.replace(
+                          'import { Button } from "./ui/button"',
+                          'import { Button } from "@/components/ui/button"'
+                        );
+                        fs.writeFileSync(
+                          connectWalletPath,
+                          connectWalletContent
+                        );
+
+                        // Update layout.tsx to import DefaultLayout from new location
+                        const layoutPath = path.join(
+                          projectPath,
+                          "app/layout.tsx"
+                        );
+                        let layoutContent = fs.readFileSync(layoutPath, "utf8");
+                        layoutContent = layoutContent.replace(
+                          'import DefaultLayout from "./DefaultLayout"',
+                          'import DefaultLayout from "./components/DefaultLayout"'
+                        );
+                        fs.writeFileSync(layoutPath, layoutContent);
+
+                        console.log("✨ Components organized successfully!");
+                      }
+                    });
                   } else {
                     console.error(
                       `Shadcn installation exited with code ${shadcnCode}`
