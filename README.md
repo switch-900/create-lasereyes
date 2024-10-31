@@ -2,7 +2,7 @@
 
 # create-lasereyes
 
-Interactive CLI tool to scaffold Next.js projects with LaserEyes integration.
+Interactive CLI tool to scaffold Next.js projects with LaserEyes integration to quickly start building Bitcoin Apps.
 
 ## Usage
 
