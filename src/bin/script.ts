@@ -128,7 +128,7 @@ async function run() {
         console.log("Installing @omnisat/lasereyes...");
         const installLaserEyes = spawn(
           "npm",
-          ["install", "@omnisat/lasereyes"],
+          ["install", "@omnisat/lasereyes", "--no-audit"],
           {
             cwd: projectPath,
             stdio: "inherit",
