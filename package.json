@@ -2,9 +2,30 @@
   "name": "create-lasereyes",
   "version": "0.0.1",
   "description": "Interactive setup for LaserEyes projects",
+  "bin": {
+    "create-lasereyes": "./dist/bin/script.js"
+  },
+  "files": [
+    "dist",
+    "src/templates"
+  ],
+  "keywords": [
+    "cli",
+    "nextjs",
+    "laser-eyes",
+    "scaffold",
+    "template"
+  ],
+  "author": "Omnisat",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/omnisat/create-lasereyes"
+  },
   "scripts": {
     "build": "tsc",
-    "postbuild": "node dist/bin/fix-shebang.js"
+    "postbuild": "node dist/bin/fix-shebang.js",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "inquirer": "^9.0.0"
