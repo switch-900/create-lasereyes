@@ -19,8 +19,7 @@ async function copyTemplateFiles(projectPath: string) {
       dirname(dirname(__dirname)),
       "src",
       "templates",
-      "next",
-      "app"
+      "next"
     );
     const targetDir = path.join(projectPath, "app");
     const componentsDir = path.join(targetDir, "components");
@@ -40,11 +39,11 @@ async function copyTemplateFiles(projectPath: string) {
         target: path.join(targetDir, "layout.tsx"),
       },
       {
-        source: "DefaultLayout.txt",
+        source: "components/DefaultLayout.txt",
         target: path.join(componentsDir, "DefaultLayout.tsx"),
       },
       {
-        source: "ConnectWallet.txt",
+        source: "components/ConnectWallet.txt",
         target: path.join(componentsDir, "ConnectWallet.tsx"),
       },
     ];
@@ -204,15 +203,15 @@ async function run() {
               if (installShadcn) {
                 console.log("Installing Shadcn...");
                 const shadcnInstall = spawn("npx", ["shadcn@latest", "init"], {
-                  cwd: path.join(process.cwd(), projectName), // Set the working directory to the new project
+                  cwd: projectPath,
                   stdio: "inherit",
                 });
 
-                shadcnInstall.on("close", (shadcnCode) => {
+                shadcnInstall.on("close", async (shadcnCode) => {
                   if (shadcnCode === 0) {
                     console.log("Shadcn installed successfully!");
 
-                    // After successful Next.js project creation and shadcn installation
+                    // Install button component first
                     const installShadcnButton = spawn(
                       "npx",
                       ["shadcn-ui@latest", "add", "button"],
@@ -222,15 +221,59 @@ async function run() {
                       }
                     );
 
-                    installShadcnButton.on("close", (code) => {
-                      if (code === 0) {
-                        console.log("✨ Components organized successfully!");
+                    installShadcnButton.on("close", async (buttonCode) => {
+                      if (buttonCode === 0) {
+                        // Now copy template files to correct locations
+                        const componentsDir = path.join(
+                          projectPath,
+                          "app",
+                          "components"
+                        );
+
+                        // Ensure components directory exists
+                        await fs.promises.mkdir(componentsDir, {
+                          recursive: true,
+                        });
+
+                        // Move or copy files to correct locations
+                        try {
+                          // Copy DefaultLayout to components folder
+                          await fs.promises.rename(
+                            path.join(projectPath, "app", "DefaultLayout.tsx"),
+                            path.join(componentsDir, "DefaultLayout.tsx")
+                          );
+
+                          // Copy ConnectWallet to components folder
+                          await fs.promises.rename(
+                            path.join(projectPath, "app", "ConnectWallet.tsx"),
+                            path.join(componentsDir, "ConnectWallet.tsx")
+                          );
+
+                          // Update layout.tsx imports
+                          const layoutPath = path.join(
+                            projectPath,
+                            "app",
+                            "layout.tsx"
+                          );
+                          let layoutContent = await fs.promises.readFile(
+                            layoutPath,
+                            "utf8"
+                          );
+                          layoutContent = layoutContent.replace(
+                            'import DefaultLayout from "./DefaultLayout"',
+                            'import DefaultLayout from "./components/DefaultLayout"'
+                          );
+                          await fs.promises.writeFile(
+                            layoutPath,
+                            layoutContent
+                          );
+
+                          console.log("✨ Components organized successfully!");
+                        } catch (err) {
+                          console.error("Error organizing components:", err);
+                        }
                       }
                     });
-                  } else {
-                    console.error(
-                      `Shadcn installation exited with code ${shadcnCode}`
-                    );
                   }
                 });
               }

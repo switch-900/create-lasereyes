@@ -4,6 +4,7 @@
 
 /** @format */
 
+import DefaultLayout from "./components/DefaultLayout";
 import { UNISAT, useLaserEyes } from "@omnisat/lasereyes";
 
 export default function Home() {
