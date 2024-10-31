@@ -137,7 +137,7 @@ async function run() {
 
         installLaserEyes.on("close", async (laserEyesCode) => {
           if (laserEyesCode === 0) {
-            console.log("@omnisat/lasereyes installed successfully! ✅");
+            console.log("✨ @omnisat/lasereyes installed successfully!");
 
             // Update README
             const readmeContent = `# ${projectName}\n\nBuilt with ${language}${
