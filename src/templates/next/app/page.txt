@@ -1,0 +1,27 @@
+/** @format */
+
+"use client";
+
+/** @format */
+
+import { UNISAT, useLaserEyes } from "@omnisat/lasereyes";
+
+export default function Home() {
+  const { connect } = useLaserEyes();
+
+  return (
+    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
+      <div className="flex flex-col items-center gap-8">
+        <h1 className="text-4xl font-bold text-center">
+          Welcome to LaserEyes Template
+        </h1>
+        <button
+          onClick={() => connect(UNISAT)}
+          className="px-6 py-3 text-lg font-medium text-white bg-black rounded-lg hover:bg-gray-800 transition-colors"
+        >
+          Connect Wallet
+        </button>
+      </div>
+    </div>
+  );
+}
