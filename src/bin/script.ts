@@ -187,7 +187,7 @@ async function run() {
               console.log(
                 `✨ Success! Created ${projectName} at ${projectPath}`
               );
-              console.log("\nHappy Building! 🤝 ");
+              console.log("\nHappy Building! 🤝");
               // Output project name as last line for shell script
               console.log(projectName);
             } catch (err) {
