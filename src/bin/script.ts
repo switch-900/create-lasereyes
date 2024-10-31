@@ -14,21 +14,19 @@ const __dirname = dirname(__filename);
 
 async function copyTemplateFiles(projectPath: string) {
   try {
-    // Move up two directories from dist/bin to get to src/templates
     const sourceDir = path.join(
       dirname(dirname(__dirname)),
       "src",
       "templates",
-      "next"
+      "next",
+      "app"
     );
     const targetDir = path.join(projectPath, "app");
     const componentsDir = path.join(targetDir, "components");
 
-    // Ensure target directories exist
-    await fs.promises.mkdir(targetDir, { recursive: true });
+    // Ensure directories exist
     await fs.promises.mkdir(componentsDir, { recursive: true });
 
-    // Map of template files to their target names and locations
     const fileMap = [
       {
         source: "page.txt",
@@ -40,15 +38,15 @@ async function copyTemplateFiles(projectPath: string) {
       },
       {
         source: "components/DefaultLayout.txt",
-        target: path.join(targetDir, "components", "DefaultLayout.tsx"),
+        target: path.join(componentsDir, "DefaultLayout.tsx"),
       },
       {
         source: "components/ConnectWallet.txt",
-        target: path.join(targetDir, "components", "ConnectWallet.tsx"),
+        target: path.join(componentsDir, "ConnectWallet.tsx"),
       },
     ];
 
-    // Copy and rename each file
+    // Copy each file
     for (const file of fileMap) {
       const sourcePath = path.join(sourceDir, file.source);
       try {
@@ -56,36 +54,12 @@ async function copyTemplateFiles(projectPath: string) {
         await fs.promises.writeFile(file.target, content, "utf8");
         console.log(`✅ Copied ${path.basename(file.target)} successfully`);
       } catch (err) {
-        console.error(`Error copying ${file.source}:`, err);
+        console.error(
+          `Error copying ${file.source} to ${path.basename(file.target)}:`,
+          err
+        );
       }
     }
-
-    // After copying files, update imports if needed
-    const connectWalletPath = path.join(componentsDir, "ConnectWallet.tsx");
-    if (fs.existsSync(connectWalletPath)) {
-      let connectWalletContent = await fs.promises.readFile(
-        connectWalletPath,
-        "utf8"
-      );
-      connectWalletContent = connectWalletContent.replace(
-        'import { Button } from "./ui/button"',
-        'import { Button } from "@/components/ui/button"'
-      );
-      await fs.promises.writeFile(connectWalletPath, connectWalletContent);
-    }
-
-    // Update layout imports
-    const layoutPath = path.join(targetDir, "layout.tsx");
-    if (fs.existsSync(layoutPath)) {
-      let layoutContent = await fs.promises.readFile(layoutPath, "utf8");
-      layoutContent = layoutContent.replace(
-        'import DefaultLayout from "./DefaultLayout"',
-        'import DefaultLayout from "./components/DefaultLayout"'
-      );
-      await fs.promises.writeFile(layoutPath, layoutContent);
-    }
-
-    console.log("✨ All template files copied successfully!");
   } catch (error) {
     console.error("Error copying template files:", error);
   }
