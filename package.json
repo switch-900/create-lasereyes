@@ -1,6 +1,6 @@
 {
   "name": "create-lasereyes",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "description": "Interactive setup for LaserEyes projects",
   "main": "./dist/bin/script.js",
   "bin": {
