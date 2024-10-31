@@ -23,29 +23,67 @@ async function copyTemplateFiles(projectPath: string) {
       "app"
     );
     const targetDir = path.join(projectPath, "app");
+    const componentsDir = path.join(targetDir, "components");
 
-    // Ensure target directory exists
+    // Ensure target directories exist
     await fs.promises.mkdir(targetDir, { recursive: true });
+    await fs.promises.mkdir(componentsDir, { recursive: true });
 
-    // Map of template files to their target names
-    const fileMap = {
-      "page.txt": "page.tsx",
-      "layout.txt": "layout.tsx",
-      "DefaultLayout.txt": "DefaultLayout.tsx",
-    };
+    // Map of template files to their target names and locations
+    const fileMap = [
+      {
+        source: "page.txt",
+        target: path.join(targetDir, "page.tsx"),
+      },
+      {
+        source: "layout.txt",
+        target: path.join(targetDir, "layout.tsx"),
+      },
+      {
+        source: "DefaultLayout.txt",
+        target: path.join(componentsDir, "DefaultLayout.tsx"),
+      },
+      {
+        source: "ConnectWallet.txt",
+        target: path.join(componentsDir, "ConnectWallet.tsx"),
+      },
+    ];
 
     // Copy and rename each file
-    for (const [source, target] of Object.entries(fileMap)) {
-      const sourcePath = path.join(sourceDir, source);
-      const targetPath = path.join(targetDir, target);
-
+    for (const file of fileMap) {
+      const sourcePath = path.join(sourceDir, file.source);
       try {
         const content = await fs.promises.readFile(sourcePath, "utf8");
-        await fs.promises.writeFile(targetPath, content, "utf8");
-        console.log(`✅ Copied ${target} successfully`);
+        await fs.promises.writeFile(file.target, content, "utf8");
+        console.log(`✅ Copied ${path.basename(file.target)} successfully`);
       } catch (err) {
-        console.error(`Error copying ${source} to ${target}:`, err);
+        console.error(`Error copying ${file.source}:`, err);
       }
+    }
+
+    // After copying files, update imports if needed
+    const connectWalletPath = path.join(componentsDir, "ConnectWallet.tsx");
+    if (fs.existsSync(connectWalletPath)) {
+      let connectWalletContent = await fs.promises.readFile(
+        connectWalletPath,
+        "utf8"
+      );
+      connectWalletContent = connectWalletContent.replace(
+        'import { Button } from "./ui/button"',
+        'import { Button } from "@/components/ui/button"'
+      );
+      await fs.promises.writeFile(connectWalletPath, connectWalletContent);
+    }
+
+    // Update layout imports
+    const layoutPath = path.join(targetDir, "layout.tsx");
+    if (fs.existsSync(layoutPath)) {
+      let layoutContent = await fs.promises.readFile(layoutPath, "utf8");
+      layoutContent = layoutContent.replace(
+        'import DefaultLayout from "./DefaultLayout"',
+        'import DefaultLayout from "./components/DefaultLayout"'
+      );
+      await fs.promises.writeFile(layoutPath, layoutContent);
     }
 
     console.log("✨ All template files copied successfully!");
@@ -186,55 +224,6 @@ async function run() {
 
                     installShadcnButton.on("close", (code) => {
                       if (code === 0) {
-                        // Create components directory if it doesn't exist
-                        const componentsDir = path.join(
-                          projectPath,
-                          "app/components"
-                        );
-                        if (!fs.existsSync(componentsDir)) {
-                          fs.mkdirSync(componentsDir, { recursive: true });
-                        }
-
-                        // Move DefaultLayout.tsx and ConnectWallet.tsx to components folder
-                        fs.renameSync(
-                          path.join(projectPath, "app/DefaultLayout.tsx"),
-                          path.join(componentsDir, "DefaultLayout.tsx")
-                        );
-                        fs.renameSync(
-                          path.join(projectPath, "app/ConnectWallet.tsx"),
-                          path.join(componentsDir, "ConnectWallet.tsx")
-                        );
-
-                        // Update import in ConnectWallet.tsx to use the correct button path
-                        const connectWalletPath = path.join(
-                          componentsDir,
-                          "ConnectWallet.tsx"
-                        );
-                        let connectWalletContent = fs.readFileSync(
-                          connectWalletPath,
-                          "utf8"
-                        );
-                        connectWalletContent = connectWalletContent.replace(
-                          'import { Button } from "./ui/button"',
-                          'import { Button } from "@/components/ui/button"'
-                        );
-                        fs.writeFileSync(
-                          connectWalletPath,
-                          connectWalletContent
-                        );
-
-                        // Update layout.tsx to import DefaultLayout from new location
-                        const layoutPath = path.join(
-                          projectPath,
-                          "app/layout.tsx"
-                        );
-                        let layoutContent = fs.readFileSync(layoutPath, "utf8");
-                        layoutContent = layoutContent.replace(
-                          'import DefaultLayout from "./DefaultLayout"',
-                          'import DefaultLayout from "./components/DefaultLayout"'
-                        );
-                        fs.writeFileSync(layoutPath, layoutContent);
-
                         console.log("✨ Components organized successfully!");
                       }
                     });
