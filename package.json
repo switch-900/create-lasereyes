@@ -2,6 +2,7 @@
   "name": "create-lasereyes",
   "version": "0.0.1",
   "description": "Interactive setup for LaserEyes projects",
+  "main": "./dist/bin/script.js",
   "bin": {
     "create-lasereyes": "./dist/bin/script.js"
   },
@@ -9,6 +10,7 @@
     "dist",
     "src/templates"
   ],
+  "type": "module",
   "keywords": [
     "cli",
     "nextjs",
@@ -25,18 +27,18 @@
   "scripts": {
     "build": "tsc",
     "postbuild": "node dist/bin/fix-shebang.js",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "inquirer": "^9.0.0"
   },
-  "type": "module",
   "devDependencies": {
     "@omnisat/lasereyes": "latest",
-    "react": "^18.0.0",
-    "react-dom": "^18.0.0",
     "@types/inquirer": "^9.0.0",
     "@types/node": "^20.0.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
     "ts-node": "^10.0.0",
     "typescript": "^5.0.0"
   }
