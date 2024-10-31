@@ -1,6 +1,6 @@
 {
   "name": "create-lasereyes",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Interactive setup for LaserEyes projects",
   "scripts": {
     "build": "tsc",
