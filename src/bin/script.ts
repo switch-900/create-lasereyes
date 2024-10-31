@@ -18,33 +18,46 @@ async function copyTemplateFiles(projectPath: string) {
       dirname(dirname(__dirname)),
       "src",
       "templates",
-      "next",
-      "app"
+      "next"
     );
+
     const targetDir = path.join(projectPath, "app");
     const componentsDir = path.join(targetDir, "components");
 
-    // Ensure directories exist
+    // Create directories and verify they exist
+    await fs.promises.mkdir(targetDir, { recursive: true });
     await fs.promises.mkdir(componentsDir, { recursive: true });
 
+    // Verify directories were created
+    if (!fs.existsSync(componentsDir)) {
+      throw new Error(
+        `Failed to create components directory at: ${componentsDir}`
+      );
+    }
+
+    // Update fileMap to use correct paths
     const fileMap = [
       {
-        source: "page.txt",
+        source: "app/page.txt",
         target: path.join(targetDir, "page.tsx"),
       },
       {
-        source: "layout.txt",
+        source: "app/layout.txt",
         target: path.join(targetDir, "layout.tsx"),
       },
       {
-        source: "components/DefaultLayout.txt",
+        source: "app/components/DefaultLayout.txt",
         target: path.join(componentsDir, "DefaultLayout.tsx"),
       },
       {
-        source: "components/ConnectWallet.txt",
+        source: "app/components/ConnectWallet.txt",
         target: path.join(componentsDir, "ConnectWallet.tsx"),
       },
     ];
+
+    // Add debug logging
+    console.log("Source directory:", sourceDir);
+    console.log("Target components directory:", componentsDir);
 
     // Copy each file
     for (const file of fileMap) {
