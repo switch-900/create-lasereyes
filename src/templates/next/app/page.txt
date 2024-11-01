@@ -1,13 +1,9 @@
 /** @format */
-
 "use client";
-
-/** @format */
-
 import { UNISAT, useLaserEyes } from "@omnisat/lasereyes";
 
 export default function Home() {
-  const { connect } = useLaserEyes();
+  const { connect, address } = useLaserEyes();
 
   return (
     <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
@@ -19,7 +15,7 @@ export default function Home() {
           onClick={() => connect(UNISAT)}
           className="px-6 py-3 text-lg font-medium text-white bg-black rounded-lg hover:bg-gray-800 transition-colors"
         >
-          Connect Wallet
+         {address ? address : "Connect Wallet"}
         </button>
       </div>
     </div>
