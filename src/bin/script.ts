@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-/** @format */
-
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
@@ -12,9 +10,9 @@ import { hideBin } from "yargs/helpers";
 
 // Utility function to execute shell commands with async/await
 async function executeCommand(
-    command: string,
-    args: string[],
-    options = {}
+  command: string,
+  args: string[],
+  options = {}
 ): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const process = spawn(command, args, { stdio: "inherit", ...options });
@@ -49,31 +47,37 @@ interface Argv {
 
 // Parse the arguments and use type assertion
 const argv = yargs(hideBin(process.argv))
-    .option('projectName', {
-      type: 'string',
-      description: 'Name of your project',
-      default: 'lasereyes-app',
-    })
-    .option('language', {
-      type: 'string',
-      choices: ['JavaScript', 'TypeScript'],
-      description: 'Language for the project',
-      default: 'TypeScript',
-    })
-    .option('installTailwind', {
-      type: 'boolean',
-      description: 'Install Tailwind CSS',
-      default: true,
-    })
-    .option('installShadcn', {
-      type: 'boolean',
-      description: 'Install Shadcn for UI components',
-    })
-    .argv as Argv; // Type assertion here
+  .option("projectName", {
+    type: "string",
+    description: "Name of your project",
+    default: "lasereyes-app",
+  })
+  .option("language", {
+    type: "string",
+    choices: ["JavaScript", "TypeScript"],
+    description: "Language for the project",
+    default: "TypeScript",
+  })
+  .option("installTailwind", {
+    type: "boolean",
+    description: "Install Tailwind CSS",
+    default: true,
+  })
+  .option("installShadcn", {
+    type: "boolean",
+    description: "Install Shadcn for UI components",
+  }).argv as Argv; // Type assertion here
 
 async function copyTemplateFiles(projectPath: string) {
   try {
-    const sourceDir = path.join(__dirname, "..", "..", "src", "templates", "next");
+    const sourceDir = path.join(
+      __dirname,
+      "..",
+      "..",
+      "src",
+      "templates",
+      "next"
+    );
     const targetDir = path.join(projectPath, "app");
     const componentsDir = path.join(projectPath, "components");
     const uiDir = path.join(componentsDir, "ui");
@@ -191,11 +195,11 @@ async function run() {
     await installLaserEyes(projectPath);
 
     const readmeContent = `# ${projectName}\n\nBuilt with ${language}${
-        installTailwind ? "\nTailwind: Enabled" : ""
+      installTailwind ? "\nTailwind: Enabled" : ""
     }\nIncludes @omnisat/lasereyes`;
     await fs.promises.writeFile(
-        path.join(projectPath, "README.md"),
-        readmeContent
+      path.join(projectPath, "README.md"),
+      readmeContent
     );
     console.log("README updated with custom content!");
 
