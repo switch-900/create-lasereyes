@@ -4,289 +4,224 @@
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
-import inquirer from "inquirer"; // Correct default import
+import inquirer from "inquirer";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
+import yargs from "yargs";
+import { hideBin } from "yargs/helpers";
+
+// Utility function to execute shell commands with async/await
+async function executeCommand(
+    command: string,
+    args: string[],
+    options = {}
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const process = spawn(command, args, { stdio: "inherit", ...options });
+    process.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`${command} exited with code ${code}`));
+      }
+    });
+  });
+}
+
+// Utility function for delay
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 // Get the current file path
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Define the type for argv
+interface Argv {
+  projectName: string;
+  language: string;
+  installTailwind: boolean;
+  installShadcn: boolean;
+  _: (string | number)[];
+  $0: string;
+}
+
+// Parse the arguments and use type assertion
+const argv = yargs(hideBin(process.argv))
+    .option('projectName', {
+      type: 'string',
+      description: 'Name of your project',
+      default: 'lasereyes-app',
+    })
+    .option('language', {
+      type: 'string',
+      choices: ['JavaScript', 'TypeScript'],
+      description: 'Language for the project',
+      default: 'TypeScript',
+    })
+    .option('installTailwind', {
+      type: 'boolean',
+      description: 'Install Tailwind CSS',
+      default: true,
+    })
+    .option('installShadcn', {
+      type: 'boolean',
+      description: 'Install Shadcn for UI components',
+    })
+    .argv as Argv; // Type assertion here
+
 async function copyTemplateFiles(projectPath: string) {
   try {
-    const sourceDir = path.join(
-      dirname(dirname(__dirname)),
-      "src",
-      "templates",
-      "next"
-    );
-
+    const sourceDir = path.join(__dirname, "..", "..", "src", "templates", "next");
     const targetDir = path.join(projectPath, "app");
-    const componentsDir = path.join(targetDir, "components");
+    const componentsDir = path.join(projectPath, "components");
+    const uiDir = path.join(componentsDir, "ui");
 
-    // Create directories and verify they exist
     await fs.promises.mkdir(targetDir, { recursive: true });
     await fs.promises.mkdir(componentsDir, { recursive: true });
+    await fs.promises.mkdir(uiDir, { recursive: true });
 
-    // Verify directories were created
-    if (!fs.existsSync(componentsDir)) {
-      throw new Error(
-        `Failed to create components directory at: ${componentsDir}`
-      );
-    }
-
-    // Update fileMap to use correct paths
     const fileMap = [
       {
         source: "app/page.txt",
-        target: path.join(targetDir, "page.tsx"),
+        target: path.join(projectPath, "app", "page.tsx"),
       },
       {
         source: "app/layout.txt",
-        target: path.join(targetDir, "layout.tsx"),
+        target: path.join(projectPath, "app", "layout.tsx"),
       },
       {
-        source: "app/components/DefaultLayout.txt",
-        target: path.join(componentsDir, "DefaultLayout.tsx"),
+        source: "components/DefaultLayout.txt",
+        target: path.join(projectPath, "components", "DefaultLayout.tsx"),
       },
       {
-        source: "app/components/ConnectWallet.txt",
-        target: path.join(componentsDir, "ConnectWallet.tsx"),
+        source: "components/ConnectWallet.txt",
+        target: path.join(projectPath, "components", "ConnectWallet.tsx"),
       },
     ];
 
-    // Add debug logging
-    console.log("Source directory:", sourceDir);
-    console.log("Target components directory:", componentsDir);
-
-    // Copy each file
     for (const file of fileMap) {
       const sourcePath = path.join(sourceDir, file.source);
-      try {
-        const content = await fs.promises.readFile(sourcePath, "utf8");
-        await fs.promises.writeFile(file.target, content, "utf8");
-        console.log(`✅ Copied ${path.basename(file.target)} successfully`);
-      } catch (err) {
-        console.error(
-          `Error copying ${file.source} to ${path.basename(file.target)}:`,
-          err
-        );
-      }
+      const content = await fs.promises.readFile(sourcePath, "utf8");
+      await fs.promises.writeFile(file.target, content, "utf8");
+      console.log(`✅ Copied ${path.basename(file.target)} successfully`);
     }
   } catch (error) {
     console.error("Error copying template files:", error);
   }
 }
 
+async function installLaserEyes(projectPath: string) {
+  console.log("Installing @omnisat/lasereyes...");
+  await executeCommand("npm", ["install", "@omnisat/lasereyes", "--no-audit"], {
+    cwd: projectPath,
+  });
+  console.log("✨ @omnisat/lasereyes installed successfully!");
+}
+
+async function installShadcnFn(projectPath: string) {
+  console.log("Initializing Shadcn...");
+  await executeCommand("npx", ["shadcn@latest", "init", "-d"], {
+    cwd: projectPath,
+  });
+  console.log("Shadcn initialized successfully!");
+
+  await delay(1000);
+
+  console.log("Adding button component...");
+  await executeCommand("npx", ["shadcn@latest", "add", "button"], {
+    cwd: projectPath,
+  });
+  console.log("✨ Shadcn button component installed successfully!");
+}
+
 async function run() {
-  const frameworkQuestion = [
-    {
-      type: "list",
-      name: "framework",
-      message: "Which framework would you like to use?",
-      choices: ["Next.js"], // Add more frameworks later here
-      default: "Next.js",
-    },
-  ];
+  try {
+    let { projectName, language, installTailwind, installShadcn } = argv;
 
-  // Ask the user which framework they want to use
-  const { framework } = await inquirer.prompt(frameworkQuestion);
+    if (!projectName || !language || typeof installTailwind !== "boolean") {
+      const answers = await inquirer.prompt([
+        {
+          type: "input",
+          name: "projectName",
+          message: "What is the name of your project?",
+          default: projectName,
+        },
+        {
+          type: "list",
+          name: "language",
+          message: "Which language would you like to use?",
+          choices: ["JavaScript", "TypeScript"],
+          default: language,
+        },
+        {
+          type: "confirm",
+          name: "installTailwind",
+          message: "Would you like to install Tailwind CSS?",
+          default: installTailwind,
+        },
+      ]);
 
-  // After selecting Next.js, ask for project-specific details
-  const questions = [
-    {
-      type: "input",
-      name: "projectName",
-      message: "What is the name of your project?",
-      default: "lasereyes-app",
-    },
-    {
-      type: "list",
-      name: "language",
-      message: "Which language would you like to use?",
-      choices: ["JavaScript", "TypeScript"],
-      default: "JavaScript",
-    },
-    {
-      type: "confirm",
-      name: "installTailwind",
-      message: "Would you like to install Tailwind CSS?",
-      default: false,
-    },
-  ];
+      projectName = answers.projectName;
+      language = answers.language;
+      installTailwind = answers.installTailwind;
+    }
 
-  const answers = await inquirer.prompt(questions);
-  const { projectName, language, installTailwind } = answers;
-
-  // Check the selected framework and run the appropriate command
-  if (framework === "Next.js") {
     console.log(`Running create-next-app for project: ${projectName}...`);
-    const createNextAppArgs = ["create-next-app@14.2.3", projectName];
+    const createNextAppArgs = [
+      "create-next-app@14.2.3",
+      projectName,
+      "--typescript",
+      "--tailwind",
+      "--eslint",
+      "--app",
+      "--import-alias=@/*",
+      "--no-git",
+      "--use-npm",
+      "--yes",
+    ];
 
-    // Add --typescript flag if TypeScript is selected
-    if (language === "TypeScript") {
-      createNextAppArgs.push("--typescript");
-    }
+    await executeCommand("npx", createNextAppArgs);
+    console.log("Next.js project created successfully!");
 
-    // Add --tailwind flag if the user selected Tailwind
+    const projectPath = path.join(process.cwd(), projectName);
+    await copyTemplateFiles(projectPath);
+
+    await installLaserEyes(projectPath);
+
+    const readmeContent = `# ${projectName}\n\nBuilt with ${language}${
+        installTailwind ? "\nTailwind: Enabled" : ""
+    }\nIncludes @omnisat/lasereyes`;
+    await fs.promises.writeFile(
+        path.join(projectPath, "README.md"),
+        readmeContent
+    );
+    console.log("README updated with custom content!");
+
     if (installTailwind) {
-      createNextAppArgs.push("--tailwind");
+      if (!installShadcn) {
+        const shadcnAnswer = await inquirer.prompt([
+          {
+            type: "confirm",
+            name: "installShadcn",
+            message: "Would you like to install Shadcn for UI components?",
+            default: true,
+          },
+        ]);
+        installShadcn = shadcnAnswer.installShadcn;
+      }
+
+      if (installShadcn) {
+        await installShadcnFn(projectPath);
+      }
     }
 
-    // Run the npx command to scaffold the Next.js app
-    const createNextApp = spawn("npx", createNextAppArgs, {
-      stdio: "inherit",
-    });
-
-    // After create-next-app completes
-    createNextApp.on("close", async (code) => {
-      if (code === 0) {
-        console.log("Next.js project created successfully!");
-
-        const projectPath = path.join(process.cwd(), projectName);
-
-        // Copy template files first
-        await copyTemplateFiles(projectPath);
-
-        // Then install @omnisat/lasereyes
-        console.log("Installing @omnisat/lasereyes...");
-        const installLaserEyes = spawn(
-          "npm",
-          ["install", "@omnisat/lasereyes", "--no-audit"],
-          {
-            cwd: projectPath,
-            stdio: "inherit",
-          }
-        );
-
-        installLaserEyes.on("close", async (laserEyesCode) => {
-          if (laserEyesCode === 0) {
-            console.log("✨ @omnisat/lasereyes installed successfully!");
-
-            // Update README
-            const readmeContent = `# ${projectName}\n\nBuilt with ${language}${
-              installTailwind ? "\nTailwind: Enabled" : ""
-            }\nIncludes @omnisat/lasereyes`;
-            fs.writeFileSync(
-              path.join(process.cwd(), projectName, "README.md"),
-              readmeContent
-            );
-
-            console.log("README updated with custom content!");
-
-            // Continue with Shadcn installation if Tailwind was selected
-            if (installTailwind) {
-              const shadcnQuestion = [
-                {
-                  type: "confirm",
-                  name: "installShadcn",
-                  message:
-                    "Would you like to install Shadcn for UI components?",
-                  default: false,
-                },
-              ];
-              const { installShadcn } = await inquirer.prompt(shadcnQuestion);
-
-              if (installShadcn) {
-                console.log("Installing Shadcn...");
-                const shadcnInstall = spawn("npx", ["shadcn@latest", "init"], {
-                  cwd: projectPath,
-                  stdio: "inherit",
-                });
-
-                shadcnInstall.on("close", async (shadcnCode) => {
-                  if (shadcnCode === 0) {
-                    console.log("Shadcn installed successfully!");
-
-                    // Install button component first
-                    const installShadcnButton = spawn(
-                      "npx",
-                      ["shadcn-ui@latest", "add", "button"],
-                      {
-                        cwd: projectPath,
-                        stdio: "inherit",
-                      }
-                    );
-
-                    installShadcnButton.on("close", async (buttonCode) => {
-                      if (buttonCode === 0) {
-                        // Now copy template files to correct locations
-                        const componentsDir = path.join(
-                          projectPath,
-                          "app",
-                          "components"
-                        );
-
-                        // Ensure components directory exists
-                        await fs.promises.mkdir(componentsDir, {
-                          recursive: true,
-                        });
-
-                        // Move or copy files to correct locations
-                        try {
-                          // Copy DefaultLayout to components folder
-                          await fs.promises.rename(
-                            path.join(projectPath, "app", "DefaultLayout.tsx"),
-                            path.join(componentsDir, "DefaultLayout.tsx")
-                          );
-
-                          // Copy ConnectWallet to components folder
-                          await fs.promises.rename(
-                            path.join(projectPath, "app", "ConnectWallet.tsx"),
-                            path.join(componentsDir, "ConnectWallet.tsx")
-                          );
-
-                          // Update layout.tsx imports
-                          const layoutPath = path.join(
-                            projectPath,
-                            "app",
-                            "layout.tsx"
-                          );
-                          let layoutContent = await fs.promises.readFile(
-                            layoutPath,
-                            "utf8"
-                          );
-                          layoutContent = layoutContent.replace(
-                            'import DefaultLayout from "./DefaultLayout"',
-                            'import DefaultLayout from "./components/DefaultLayout"'
-                          );
-                          await fs.promises.writeFile(
-                            layoutPath,
-                            layoutContent
-                          );
-
-                          console.log("✨ Components organized successfully!");
-                        } catch (err) {
-                          console.error("Error organizing components:", err);
-                        }
-                      }
-                    });
-                  }
-                });
-              }
-            }
-
-            // After everything is done, CD into the project directory
-            try {
-              console.log(
-                `✨ Success! Created ${projectName} at ${projectPath}`
-              );
-              console.log("\nHappy Building! 🤝");
-              // Output project name as last line for shell script
-              console.log(projectName);
-            } catch (err) {
-              console.error("Failed:", err);
-            }
-          } else {
-            console.error(
-              `LaserEyes installation failed with code ${laserEyesCode}`
-            );
-          }
-        });
-      } else {
-        console.error(`create-next-app process exited with code ${code}`);
-      }
-    });
+    console.log(`✨ Success! Created ${projectName} at ${projectPath}`);
+    console.log("\nHappy Building! 🤝");
+    console.log(projectName);
+  } catch (error) {
+    console.error("An error occurred:", error);
   }
 }
 
