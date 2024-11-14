@@ -400,23 +400,20 @@ function executeCommand(
       },
     };
 
-    // Show loading animation for create-next-app
+    // Loading animation for all commands
     let loadingInterval: NodeJS.Timeout | null = null;
-    if (args.includes("create-next-app")) {
-      console.log("Creating new Next.js app...");
-      const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-      let i = 0;
-      loadingInterval = setInterval(() => {
-        process.stdout.write(`\r${frames[i]}`);
-        i = (i + 1) % frames.length;
-      }, 80);
-    }
+    const dots = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"];
+    let i = 0;
+
+    loadingInterval = setInterval(() => {
+      process.stdout.write(`\r${dots[i]}`);
+      i = (i + 1) % dots.length;
+    }, 80);
 
     const child = spawn(command, args, spawnOptions);
+    let stderrOutput = "";
 
     if (silent) {
-      let stderrOutput = "";
-
       if (child.stderr) {
         child.stderr.on("data", (data) => {
           const output = data.toString();
@@ -431,38 +428,24 @@ function executeCommand(
           // Intentionally empty to suppress output
         });
       }
-
-      child.on("close", (code) => {
-        if (loadingInterval) {
-          clearInterval(loadingInterval);
-          process.stdout.clearLine(0);
-          process.stdout.cursorTo(0);
-        }
-
-        if (code !== 0) {
-          if (stderrOutput) {
-            console.error(stderrOutput);
-          }
-          reject(new Error(`${command} ${args.join(" ")} failed`));
-          return;
-        }
-        resolve();
-      });
-    } else {
-      child.on("close", (code) => {
-        if (loadingInterval) {
-          clearInterval(loadingInterval);
-          process.stdout.clearLine(0);
-          process.stdout.cursorTo(0);
-        }
-
-        if (code !== 0) {
-          reject(new Error(`${command} ${args.join(" ")} failed`));
-          return;
-        }
-        resolve();
-      });
     }
+
+    child.on("close", (code) => {
+      if (loadingInterval) {
+        clearInterval(loadingInterval);
+        process.stdout.clearLine(0);
+        process.stdout.cursorTo(0);
+      }
+
+      if (code !== 0) {
+        if (silent && stderrOutput) {
+          console.error(stderrOutput);
+        }
+        reject(new Error(`${command} ${args.join(" ")} failed`));
+        return;
+      }
+      resolve();
+    });
   });
 }
 
