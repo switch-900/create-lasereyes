@@ -8,7 +8,7 @@
   },
   "files": [
     "dist",
-    "src/templates"
+    "templates"
   ],
   "type": "module",
   "keywords": [
@@ -26,18 +26,22 @@
   },
   "scripts": {
     "build": "tsc",
-    "postbuild": "node dist/bin/fix-shebang.js",
-    "prepare": "npm run build",
-    "prepublishOnly": "npm run build"
+    "postbuild": "node dist/bin/fix-shebang.js"
   },
   "dependencies": {
+    "cac": "^6.7.14",
+    "cross-spawn": "^7.0.5",
     "inquirer": "^9.0.0",
+    "picocolors": "^1.1.1",
+    "prompts": "^2.4.2",
     "yargs": "^17.7.2"
   },
   "devDependencies": {
     "@omnisat/lasereyes": "latest",
+    "@types/cross-spawn": "^6.0.6",
     "@types/inquirer": "^9.0.0",
     "@types/node": "^20.0.0",
+    "@types/prompts": "^2.4.9",
     "@types/yargs": "^17.0.33",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
