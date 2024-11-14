@@ -292,6 +292,28 @@ async function init() {
       {}
     );
 
+    // Install @omnisat/lasereyes-vue
+    console.log("\nInstalling @omnisat/lasereyes-vue...");
+    try {
+      await executeCommand(
+        "npm",
+        [
+          "install",
+          "@omnisat/lasereyes-vue@latest",
+          "--save",
+          "--no-fund",
+          "--no-audit",
+          "--loglevel=error",
+        ],
+        { cwd: root },
+        true
+      );
+      console.log(`${pc.green("✓")} @omnisat/lasereyes-vue installed!`);
+    } catch (error) {
+      console.error("Failed to install @omnisat/lasereyes-vue:", error);
+      throw error;
+    }
+
     const templateDir = path.resolve(
       fileURLToPath(import.meta.url),
       "..",
@@ -301,11 +323,13 @@ async function init() {
       variant
     );
 
+    // Copy template files - removed TailwindCSS related files
     console.log("\nCustomizing template...");
     const filesToCopy = [
       "src/App.vue",
-      "src/components/ConnectWallet.vue",
-      "src/components/DefaultLayout.vue",
+      "src/main.ts",
+      "src/style.css",
+      "vite.config.ts",
     ];
 
     for (const file of filesToCopy) {
@@ -323,44 +347,6 @@ async function init() {
       } catch (error) {
         console.warn(`Failed to copy template file ${file}:`, error);
       }
-    }
-
-    console.log("\nInstalling @omnisat/lasereyes...");
-    try {
-      await executeCommand(
-        "npm",
-        ["install", "@omnisat/lasereyes@latest", "--save"],
-        { cwd: root }
-      );
-      console.log(`${pc.green("✓")} @omnisat/lasereyes installed!`);
-    } catch (error) {
-      console.error("Failed to install @omnisat/lasereyes:", error);
-      throw error;
-    }
-
-    // Install additional Vue dependencies
-    console.log("\nInstalling additional dependencies...");
-    try {
-      await executeCommand(
-        "npm",
-        [
-          "install",
-          "vue-router@4",
-          "@vueuse/core",
-          "@headlessui/vue",
-          "@heroicons/vue",
-          "--save",
-          "--no-fund",
-          "--no-audit",
-          "--loglevel=error",
-        ],
-        { cwd: root },
-        true
-      );
-      console.log("Dependencies installed!");
-    } catch (error) {
-      console.error("Failed to install additional dependencies:", error);
-      throw error;
     }
   }
 

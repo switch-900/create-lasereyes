@@ -1,21 +1,16 @@
 <script setup lang="ts">
-import { DefaultLayout } from "./components/DefaultLayout.vue";
+import { useLaserEyes } from "@omnisat/lasereyes-vue";
+
+// import { useLaserEyes } from "../lib/index";
+
+const { address, connect, connected, disconnect } = useLaserEyes();
 </script>
 
 <template>
-  <DefaultLayout>
-    <div
-      class="min-h-screen flex flex-col items-center justify-center gap-8 p-8"
-    >
-      <h1 class="text-4xl font-bold text-center">
-        Welcome to LaserEyes Template
-      </h1>
-      <div class="flex flex-col items-center gap-4">
-        <ConnectWallet />
-        <div v-if="address" class="flex flex-col gap-2">
-          <p class="text-lg text-center">Connected Address: {{ address }}</p>
-        </div>
-      </div>
-    </div>
-  </DefaultLayout>
+  <p>Address: {{ address }}</p>
+  <button @click="() => (connected ? disconnect() : connect('unisat'))">
+    {{ connected ? "dis" : "" }}connect
+  </button>
 </template>
+
+<style scoped></style>
