@@ -1,232 +1,440 @@
 #!/usr/bin/env node
-import { spawn } from "child_process";
-import fs from "fs";
-import path from "path";
-import inquirer from "inquirer";
-import { fileURLToPath } from "url";
-import { dirname } from "path";
-import yargs from "yargs";
-import { hideBin } from "yargs/helpers";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import { cac } from "cac";
+import spawn from "cross-spawn";
+import pc from "picocolors";
+import prompts from "prompts";
 
-// Utility function to execute shell commands with async/await
-async function executeCommand(
+import { type Framework, frameworks } from "../frameworks.js";
+import {
+  copy,
+  emptyDir,
+  formatTargetDir,
+  isEmpty,
+  isValidPackageName,
+  pkgFromUserAgent,
+  toValidPackageName,
+  installDependencies,
+  updatePackageJson,
+} from "../utils.js";
+
+const templates = frameworks
+  .map((f) => f.variants?.map((v) => v.name) || [f.name])
+  .reduce((a, b) => a.concat(b), []);
+
+const cli = cac("create-lasereyes");
+
+cli
+  .usage(`${pc.green("<project-directory>")} [options]`)
+  .option(
+    "-t, --template [name]",
+    `Template to use. Available: ${templates.join(", ")}`
+  )
+  .option("--npm", "Use npm as your package manager")
+  .option("--pnpm", "Use pnpm as your package manager")
+  .option("--yarn", "Use yarn as your package manager")
+  .option("--tailwind", "Install TailwindCSS", { default: true })
+  .option("--shadcn", "Install Shadcn UI components");
+
+const defaultTargetDir = "lasereyes-project";
+
+const renameFiles: Record<string, string | undefined> = {
+  _gitignore: ".gitignore",
+  "_env.local": ".env.local",
+  _npmrc: ".npmrc",
+};
+
+async function init() {
+  const { args, options } = cli.parse(process.argv);
+  if (options.help) return;
+
+  const argTargetDir = formatTargetDir(args[0]);
+  const argTemplate = options.template || options.t;
+
+  let targetDir = argTargetDir || defaultTargetDir;
+
+  const getProjectName = () =>
+    targetDir === "." ? path.basename(path.resolve()) : targetDir;
+
+  let result: prompts.Answers<
+    "framework" | "overwrite" | "projectName" | "variant" | "overwriteChecker"
+  >;
+
+  try {
+    result = await prompts(
+      [
+        {
+          type: argTargetDir ? null : "text",
+          name: "projectName",
+          message: pc.reset("Project name:"),
+          initial: defaultTargetDir,
+          onState: (state) => {
+            targetDir = formatTargetDir(state.value) || defaultTargetDir;
+          },
+        },
+        {
+          type: () =>
+            !fs.existsSync(targetDir) || isEmpty(targetDir) ? null : "confirm",
+          name: "overwrite",
+          message: () =>
+            `${
+              targetDir === "."
+                ? "Current directory"
+                : `Target directory "${targetDir}"`
+            } is not empty. Remove existing files and continue?`,
+        },
+        {
+          type: (_, { overwrite }: { overwrite?: boolean }) => {
+            if (overwrite === false) {
+              throw new Error(`${pc.red("✖")} Operation cancelled`);
+            }
+            return null;
+          },
+          name: "overwriteChecker",
+        },
+        {
+          type:
+            argTemplate && templates.includes(argTemplate) ? null : "select",
+          name: "framework",
+          message:
+            typeof argTemplate === "string" && !templates.includes(argTemplate)
+              ? pc.reset(
+                  `"${argTemplate}" isn't a valid template. Please choose from below: `
+                )
+              : pc.reset("Select a framework:"),
+          initial: 0,
+          choices: frameworks.map((framework) => {
+            const frameworkColor = framework.color;
+            return {
+              title: frameworkColor(framework.display || framework.name),
+              value: framework,
+            };
+          }),
+        },
+        {
+          type: (framework: Framework) =>
+            framework?.variants && framework.variants.length > 0
+              ? "select"
+              : null,
+          name: "variant",
+          message: pc.reset("Select a variant:"),
+          choices: (framework: Framework) => {
+            if (!framework?.variants) return [];
+            return framework.variants.map((variant) => {
+              const variantColor = variant.color;
+              return {
+                title: variantColor(variant.display || variant.name),
+                value: variant.name,
+              };
+            });
+          },
+        },
+      ],
+      {
+        onCancel: () => {
+          throw new Error(`${pc.red("✖")} Operation cancelled`);
+        },
+      }
+    );
+  } catch (cancelled: any) {
+    console.log(cancelled.message);
+    return;
+  }
+
+  const { framework, overwrite, variant } = result;
+  const root = path.join(process.cwd(), targetDir);
+
+  if (overwrite) {
+    emptyDir(root);
+  }
+
+  if (variant === "next-app") {
+    console.log("\nCreating new Next.js app...");
+    // Set environment variables to suppress npm output
+    const env = {
+      ...process.env,
+      npm_config_loglevel: "error",
+      npm_config_fund: "false",
+      npm_config_audit: "false",
+      npm_config_update_notifier: "false",
+      NEXT_TELEMETRY_DISABLED: "1",
+      NEXT_PRIVATE_SKIP_SETUP: "1",
+    };
+
+    await executeCommand(
+      "npx",
+      [
+        "--quiet",
+        "create-next-app@14.2.3",
+        targetDir,
+        "--typescript",
+        "--tailwind",
+        "--eslint",
+        "--app",
+        "--src-dir",
+        "--import-alias",
+        "@/*",
+        "--no-git",
+        "--use-npm",
+        "--no-turbo",
+        "--use-react=18",
+        "--no-dependencies",
+        "--quiet",
+        "--skip-instructions",
+      ],
+      { env },
+      true
+    );
+
+    const templateDir = path.resolve(
+      fileURLToPath(import.meta.url),
+      "..",
+      "..",
+      "..",
+      "templates",
+      variant
+    );
+
+    console.log("\nCustomizing template...");
+    const filesToCopy = [
+      "src/app/page.tsx",
+      "src/app/layout.tsx",
+      "src/components/DefaultLayout.tsx",
+      "src/components/ConnectWallet.tsx",
+    ];
+
+    for (const file of filesToCopy) {
+      const srcFile = path.join(templateDir, file);
+      const destFile = path.join(root, file);
+
+      try {
+        fs.mkdirSync(path.dirname(destFile), { recursive: true });
+        if (fs.existsSync(srcFile)) {
+          fs.copyFileSync(srcFile, destFile);
+          console.log(`${pc.green("✓")} Created ${file}`);
+        } else {
+          console.warn(`Template file not found: ${file}`);
+        }
+      } catch (error) {
+        console.warn(`Failed to copy template file ${file}:`, error);
+      }
+    }
+
+    console.log("\nInstalling @omnisat/lasereyes...");
+    try {
+      await executeCommand(
+        "npm",
+        [
+          "install",
+          "@omnisat/lasereyes@latest",
+          "--save",
+          "--no-fund",
+          "--no-audit",
+          "--loglevel=error",
+        ],
+        { cwd: root },
+        true
+      );
+      console.log(`${pc.green("✓")} @omnisat/lasereyes installed!`);
+    } catch (error) {
+      console.error("Failed to install @omnisat/lasereyes:", error);
+      throw error;
+    }
+
+    console.log("\nInitializing Shadcn...");
+    try {
+      await executeCommand(
+        "npx",
+        ["shadcn@latest", "init", "-d"],
+        {
+          cwd: root,
+          env: {
+            SKIP_INSTRUCTIONS: "1",
+          },
+        },
+        true
+      );
+      console.log(`${pc.green("✓")} Shadcn initialized successfully!`);
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Add the button component
+      console.log("\nAdding button component...");
+      await executeCommand(
+        "npx",
+        ["shadcn@latest", "add", "button"],
+        {
+          cwd: root,
+          env: {
+            SKIP_INSTRUCTIONS: "1",
+          },
+        },
+        true
+      );
+      console.log(`${pc.green("✓")} Button component installed!`);
+    } catch (error) {
+      console.error("Failed to initialize shadcn/ui:", error);
+      throw error;
+    }
+
+    console.log(
+      `\n${pc.green("✨")} Success! Created ${targetDir} at ${root}\n`
+    );
+    console.log("Happy Building! 🤝");
+    console.log(targetDir);
+  } else if (variant === "vue-app") {
+    console.log("\nCreating new Vue app...");
+    await executeCommand(
+      "npm",
+      ["create", "vite@latest", targetDir, "--", "--template", "vue-ts"],
+      {}
+    );
+
+    // Install @omnisat/lasereyes-vue
+    console.log("\nInstalling @omnisat/lasereyes-vue...");
+    try {
+      await executeCommand(
+        "npm",
+        [
+          "install",
+          "@omnisat/lasereyes-vue@latest",
+          "--save",
+          "--no-fund",
+          "--no-audit",
+          "--loglevel=error",
+        ],
+        { cwd: root },
+        true
+      );
+      console.log(`${pc.green("✓")} @omnisat/lasereyes-vue installed!`);
+    } catch (error) {
+      console.error("Failed to install @omnisat/lasereyes-vue:", error);
+      throw error;
+    }
+
+    const templateDir = path.resolve(
+      fileURLToPath(import.meta.url),
+      "..",
+      "..",
+      "..",
+      "templates",
+      variant
+    );
+
+    // Copy template files - removed TailwindCSS related files
+    console.log("\nCustomizing template...");
+    const filesToCopy = [
+      "src/App.vue",
+      "src/main.ts",
+      "src/style.css",
+      "vite.config.ts",
+    ];
+
+    for (const file of filesToCopy) {
+      const srcFile = path.join(templateDir, file);
+      const destFile = path.join(root, file);
+
+      try {
+        fs.mkdirSync(path.dirname(destFile), { recursive: true });
+        if (fs.existsSync(srcFile)) {
+          fs.copyFileSync(srcFile, destFile);
+          console.log(`${pc.green("✓")} Created ${file}`);
+        } else {
+          console.warn(`Template file not found: ${file}`);
+        }
+      } catch (error) {
+        console.warn(`Failed to copy template file ${file}:`, error);
+      }
+    }
+  }
+
+  const pkgManager = options.yarn ? "yarn" : options.pnpm ? "pnpm" : "npm";
+
+  console.log(`\nDone. Now run:\n`);
+  if (root !== process.cwd()) {
+    console.log(`  cd ${path.relative(process.cwd(), root)}`);
+  }
+  console.log(`  ${pkgManager} run dev`);
+  console.log();
+}
+
+function executeCommand(
   command: string,
   args: string[],
-  options = {}
-): Promise<void> {
+  options: any,
+  silent = false
+) {
   return new Promise<void>((resolve, reject) => {
-    const process = spawn(command, args, { stdio: "inherit", ...options });
-    process.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`${command} exited with code ${code}`));
+    const spawnOptions = {
+      ...options,
+      stdio: silent ? "pipe" : "inherit",
+      env: {
+        ...process.env,
+        ...options.env,
+        npm_config_loglevel: "silent",
+        npm_config_fund: "false",
+        npm_config_audit: "false",
+        npm_config_update_notifier: "false",
+        NEXT_TELEMETRY_DISABLED: "1",
+        NEXT_PRIVATE_SKIP_SETUP: "1",
+        DEBUG: "",
+        CI: "1",
+        FORCE_COLOR: "0",
+        NO_UPDATE_NOTIFIER: "1",
+      },
+    };
+
+    // Loading animation for all commands
+    let loadingInterval: NodeJS.Timeout | null = null;
+    const dots = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"];
+    let i = 0;
+
+    loadingInterval = setInterval(() => {
+      process.stdout.write(`\r${dots[i]}`);
+      i = (i + 1) % dots.length;
+    }, 80);
+
+    const child = spawn(command, args, spawnOptions);
+    let stderrOutput = "";
+
+    if (silent) {
+      if (child.stderr) {
+        child.stderr.on("data", (data) => {
+          const output = data.toString();
+          if (output.toLowerCase().includes("error")) {
+            stderrOutput += output;
+          }
+        });
       }
+
+      if (child.stdout) {
+        child.stdout.on("data", () => {
+          // Intentionally empty to suppress output
+        });
+      }
+    }
+
+    child.on("close", (code) => {
+      if (loadingInterval) {
+        clearInterval(loadingInterval);
+        process.stdout.clearLine(0);
+        process.stdout.cursorTo(0);
+      }
+
+      if (code !== 0) {
+        if (silent && stderrOutput) {
+          console.error(stderrOutput);
+        }
+        reject(new Error(`${command} ${args.join(" ")} failed`));
+        return;
+      }
+      resolve();
     });
   });
 }
 
-// Utility function for delay
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// Get the current file path
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// Define the type for argv
-interface Argv {
-  projectName: string;
-  language: string;
-  installTailwind: boolean;
-  installShadcn: boolean;
-  _: (string | number)[];
-  $0: string;
-}
-
-// Parse the arguments and use type assertion
-const argv = yargs(hideBin(process.argv))
-  .option("projectName", {
-    type: "string",
-    description: "Name of your project",
-    default: "lasereyes-app",
-  })
-  .option("language", {
-    type: "string",
-    choices: ["JavaScript", "TypeScript"],
-    description: "Language for the project",
-    default: "TypeScript",
-  })
-  .option("installTailwind", {
-    type: "boolean",
-    description: "Install Tailwind CSS",
-    default: true,
-  })
-  .option("installShadcn", {
-    type: "boolean",
-    description: "Install Shadcn for UI components",
-  }).argv as Argv; // Type assertion here
-
-async function copyTemplateFiles(projectPath: string) {
-  try {
-    const sourceDir = path.join(
-      __dirname,
-      "..",
-      "..",
-      "src",
-      "templates",
-      "next"
-    );
-    const targetDir = path.join(projectPath, "app");
-    const componentsDir = path.join(projectPath, "components");
-    const uiDir = path.join(componentsDir, "ui");
-
-    await fs.promises.mkdir(targetDir, { recursive: true });
-    await fs.promises.mkdir(componentsDir, { recursive: true });
-    await fs.promises.mkdir(uiDir, { recursive: true });
-
-    const fileMap = [
-      {
-        source: "app/page.txt",
-        target: path.join(projectPath, "app", "page.tsx"),
-      },
-      {
-        source: "app/layout.txt",
-        target: path.join(projectPath, "app", "layout.tsx"),
-      },
-      {
-        source: "components/DefaultLayout.txt",
-        target: path.join(projectPath, "components", "DefaultLayout.tsx"),
-      },
-      {
-        source: "components/ConnectWallet.txt",
-        target: path.join(projectPath, "components", "ConnectWallet.tsx"),
-      },
-    ];
-
-    for (const file of fileMap) {
-      const sourcePath = path.join(sourceDir, file.source);
-      const content = await fs.promises.readFile(sourcePath, "utf8");
-      await fs.promises.writeFile(file.target, content, "utf8");
-      console.log(`✅ Copied ${path.basename(file.target)} successfully`);
-    }
-  } catch (error) {
-    console.error("Error copying template files:", error);
-  }
-}
-
-async function installLaserEyes(projectPath: string) {
-  console.log("Installing @omnisat/lasereyes...");
-  await executeCommand("npm", ["install", "@omnisat/lasereyes", "--no-audit"], {
-    cwd: projectPath,
-  });
-  console.log("✨ @omnisat/lasereyes installed successfully!");
-}
-
-async function installShadcnFn(projectPath: string) {
-  console.log("Initializing Shadcn...");
-  await executeCommand("npx", ["shadcn@latest", "init", "-d"], {
-    cwd: projectPath,
-  });
-  console.log("Shadcn initialized successfully!");
-
-  await delay(1000);
-
-  console.log("Adding button component...");
-  await executeCommand("npx", ["shadcn@latest", "add", "button"], {
-    cwd: projectPath,
-  });
-  console.log("✨ Shadcn button component installed successfully!");
-}
-
-async function run() {
-  try {
-    let { projectName, language, installTailwind, installShadcn } = argv;
-
-    if (!projectName || !language || typeof installTailwind !== "boolean") {
-      const answers = await inquirer.prompt([
-        {
-          type: "input",
-          name: "projectName",
-          message: "What is the name of your project?",
-          default: projectName,
-        },
-        {
-          type: "list",
-          name: "language",
-          message: "Which language would you like to use?",
-          choices: ["JavaScript", "TypeScript"],
-          default: language,
-        },
-        {
-          type: "confirm",
-          name: "installTailwind",
-          message: "Would you like to install Tailwind CSS?",
-          default: installTailwind,
-        },
-      ]);
-
-      projectName = answers.projectName;
-      language = answers.language;
-      installTailwind = answers.installTailwind;
-    }
-
-    console.log(`Running create-next-app for project: ${projectName}...`);
-    const createNextAppArgs = [
-      "create-next-app@14.2.3",
-      projectName,
-      "--typescript",
-      "--tailwind",
-      "--eslint",
-      "--app",
-      "--import-alias=@/*",
-      "--no-git",
-      "--use-npm",
-      "--yes",
-    ];
-
-    await executeCommand("npx", createNextAppArgs);
-    console.log("Next.js project created successfully!");
-
-    const projectPath = path.join(process.cwd(), projectName);
-    await copyTemplateFiles(projectPath);
-
-    await installLaserEyes(projectPath);
-
-    const readmeContent = `# ${projectName}\n\nBuilt with ${language}${
-      installTailwind ? "\nTailwind: Enabled" : ""
-    }\nIncludes @omnisat/lasereyes`;
-    await fs.promises.writeFile(
-      path.join(projectPath, "README.md"),
-      readmeContent
-    );
-    console.log("README updated with custom content!");
-
-    if (installTailwind) {
-      if (!installShadcn) {
-        const shadcnAnswer = await inquirer.prompt([
-          {
-            type: "confirm",
-            name: "installShadcn",
-            message: "Would you like to install Shadcn for UI components?",
-            default: true,
-          },
-        ]);
-        installShadcn = shadcnAnswer.installShadcn;
-      }
-
-      if (installShadcn) {
-        await installShadcnFn(projectPath);
-      }
-    }
-
-    console.log(`✨ Success! Created ${projectName} at ${projectPath}`);
-    console.log("\nHappy Building! 🤝");
-    console.log(projectName);
-  } catch (error) {
-    console.error("An error occurred:", error);
-  }
-}
-
-run();
+init().catch((e) => {
+  console.error(e);
+});

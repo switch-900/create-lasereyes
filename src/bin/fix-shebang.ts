@@ -1,36 +1,30 @@
-import { promises as fs } from "fs";
-import { join } from "path";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 
-// Path to the compiled JavaScript file in your dist directory
-const scriptPath = join(process.cwd(), "dist/bin/script.js");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// The shebang line to add
-const shebang = "#!/usr/bin/env node\n";
+const scriptPath = path.join(__dirname, "script.js");
 
-async function addShebang() {
-  try {
-    // Read the contents of the file
-    let data = await fs.readFile(scriptPath, "utf8");
+try {
+  const content = fs.readFileSync(scriptPath, "utf8");
+  const hasShebang = content.startsWith("#!");
 
-    // Check if the shebang is already there and replace any existing shebang
-    const shebangRegex = /^#!.*\n/;
-    if (shebangRegex.test(data)) {
-      console.log("Found existing shebang, replacing it.");
-      data = data.replace(shebangRegex, "");
-    }
+  const newContent = hasShebang
+    ? content.replace(/^#!.*/, "#!/usr/bin/env node")
+    : "#!/usr/bin/env node\n" + content;
 
-    const updatedContent = shebang + data;
+  fs.writeFileSync(scriptPath, newContent);
+  fs.chmodSync(scriptPath, "755");
 
-    // Write the updated content back to the file
-    await fs.writeFile(scriptPath, updatedContent, "utf8");
-    console.log("Shebang added/replaced successfully!");
-
-    // Set the correct permissions to make the file executable
-    await fs.chmod(scriptPath, 0o755);
-    console.log("Execution permissions added successfully!");
-  } catch (err) {
-    console.error("Error:", err);
-  }
+  console.log(
+    hasShebang
+      ? "Found existing shebang, replacing it."
+      : "No shebang found, adding it."
+  );
+  console.log("Shebang added/replaced successfully!");
+  console.log("Execution permissions added successfully!");
+} catch (error) {
+  console.error("Error processing file:", error);
 }
-
-addShebang();
