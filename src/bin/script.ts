@@ -203,6 +203,7 @@ async function init() {
       "src/app/layout.tsx",
       "src/components/DefaultLayout.tsx",
       "src/components/ConnectWallet.tsx",
+      "src/components/ThemeToggle.tsx",
     ];
 
     for (const file of filesToCopy) {
@@ -243,6 +244,24 @@ async function init() {
       throw error;
     }
 
+    console.log("\nInstalling next-themes...");
+    await executeCommand(
+      "npm",
+      [
+        "install",
+        "next-themes",
+        "--save",
+        "--no-fund",
+        "--no-audit",
+        "--loglevel=error",
+      ],
+      {
+        cwd: root,
+      },
+      true
+    );
+    console.log(`${pc.green("✓")} next-themes installed!`);
+
     console.log("\nInitializing Shadcn...");
     try {
       await executeCommand(
@@ -274,6 +293,36 @@ async function init() {
         true
       );
       console.log(`${pc.green("✓")} Button component installed!`);
+
+      // Add the dropdown-menu component
+      console.log("\nAdding dropdown-menu component...");
+      await executeCommand(
+        "npx",
+        ["shadcn@latest", "add", "dropdown-menu"],
+        {
+          cwd: root,
+          env: {
+            SKIP_INSTRUCTIONS: "1",
+          },
+        },
+        true
+      );
+      console.log(`${pc.green("✓")} Dropdown menu component installed!`);
+
+      // Add the dialog component
+      console.log("\nAdding dialog component...");
+      await executeCommand(
+        "npx",
+        ["shadcn@latest", "add", "dialog"],
+        {
+          cwd: root,
+          env: {
+            SKIP_INSTRUCTIONS: "1",
+          },
+        },
+        true
+      );
+      console.log(`${pc.green("✓")} Dialog component installed!`);
     } catch (error) {
       console.error("Failed to initialize shadcn/ui:", error);
       throw error;
