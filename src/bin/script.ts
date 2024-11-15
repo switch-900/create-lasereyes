@@ -238,10 +238,45 @@ async function init() {
         { cwd: root },
         true
       );
-      console.log(`${pc.green("✓")} @omnisat/lasereyes installed!`);
+      console.log(`${pc.green("✓")} @omnisat/lasereyes installed!\n`);
     } catch (error) {
       console.error("Failed to install @omnisat/lasereyes:", error);
       throw error;
+    }
+
+    // Ask about cursor rules
+    const cursorResult = await prompts(
+      {
+        type: "confirm",
+        name: "addCursorRules",
+        message:
+          "🤖 Using Cursor.ai?\nWould you like to add LaserEyes-specific .cursorrules file?",
+        initial: true,
+      },
+      {
+        onCancel: () => {
+          throw new Error(`${pc.red("✖")} Operation cancelled`);
+        },
+      }
+    );
+
+    if (cursorResult.addCursorRules) {
+      console.log("\nAdding .cursorrules file...");
+      try {
+        const cursorRulesPath = path.join(templateDir, ".cursorrules");
+        const targetCursorRulesPath = path.join(root, ".cursorrules");
+
+        if (fs.existsSync(cursorRulesPath)) {
+          fs.copyFileSync(cursorRulesPath, targetCursorRulesPath);
+          console.log(
+            `${pc.green("✓")} Added .cursorrules file for Cursor.ai integration`
+          );
+        }
+      } catch (error) {
+        console.warn("Failed to copy .cursorrules file:", error);
+      }
+    } else {
+      console.log(`${pc.yellow("⚠")} Adding .cursorrules file skipped`);
     }
 
     console.log("\nInstalling next-themes...");
