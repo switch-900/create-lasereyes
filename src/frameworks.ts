@@ -12,13 +12,14 @@ export interface Framework {
   display: string;
   color: (str: string) => string;
   variants?: Variant[];
+  disabled?: boolean;
 }
 
 export const frameworks: Framework[] = [
   {
     name: "react",
     display: "React",
-    color: pc.blue,
+    color: pc.green,
     variants: [
       {
         name: "next-app",
@@ -29,25 +30,27 @@ export const frameworks: Framework[] = [
   },
   {
     name: "vue",
-    display: "Vue",
-    color: pc.green,
+    display: "Vue: Coming Soon",
+    color: pc.gray,
+    disabled: true,
     variants: [
       {
         name: "vue-app",
         display: "Vue 3 + Vite",
-        color: pc.green,
+        color: pc.gray,
       },
     ],
   },
   {
     name: "vanilla",
-    display: "Vanilla",
-    color: pc.yellow,
+    display: "Vanilla: Coming Soon",
+    color: pc.gray,
+    disabled: true,
     variants: [
       {
         name: "vite-vanilla",
         display: "Vite",
-        color: pc.yellow,
+        color: pc.gray,
       },
     ],
   },
