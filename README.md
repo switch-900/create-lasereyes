@@ -15,10 +15,7 @@ npx create-lasereyes
 - 🎨 **Styling**
   - Shadcn / Tailwind CSS setup
   - Light / Dark Mode App Toggle
-- 🚀 **Best Practices**
-  - TypeScript by default
-  - ESLint configuration
-  - Optimized project structure
+- 🤖 **.cursorrules**: For developers using Cursor editor, provides AI assistant configuration to make working with AI tools easier than ever
 
 ## Project Structure
 
@@ -36,9 +33,20 @@ src/
 │   ├── ConnectWallet.tsx    # LaserEyes Wallet Connection Modal
 │   ├── DefaultLayout.tsx    # LaserEyes Provider Wrapper
 │   └── ThemeToggle.tsx      # Light/Dark Mode Toggle
-└── lib/
-    └── utils.ts
+├── lib/
+│   └── utils.ts
+└── .cursorrules             # AI assistant configuration for Cursor editor
 ```
+
+### Key Components
+
+- **ConnectWallet.tsx**: Modal component for connecting Bitcoin wallets
+- **DefaultLayout.tsx**: Wraps your app in `useLaserEyesProvider` for Bitcoin functionality
+- **ThemeToggle.tsx**: Toggle component for switching between light and dark modes
+
+### AI Assistance
+
+- **.cursorrules**: For developers using Cursor editor, provides AI assistant configuration to make working with AI tools easier than ever
 
 ## Development
 
