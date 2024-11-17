@@ -32,10 +32,10 @@ src/
 │   ├── layout.tsx           # Root layout with providers
 │   └── page.tsx             # Home page
 ├── components/
-│   ├── ui/                  # Reusable Shadcn UI components
-│   ├── ConnectWallet.tsx    # LaserEyes Wallet connection modal
-│   ├── DefaultLayout.tsx    # LaserEyes provider wrapper
-│   └── ThemeToggle.tsx      # Light/Dark mode switcher
+│   ├── ui/                  # Reusable Shadcn UI Components
+│   ├── ConnectWallet.tsx    # LaserEyes Wallet Connection Modal
+│   ├── DefaultLayout.tsx    # LaserEyes Provider Wrapper
+│   └── ThemeToggle.tsx      # Light/Dark Mode Toggle
 └── lib/
     └── utils.ts
 ```
