@@ -267,13 +267,21 @@ async function init() {
         const targetCursorRulesPath = path.join(root, ".cursorrules");
 
         if (fs.existsSync(cursorRulesPath)) {
-          fs.copyFileSync(cursorRulesPath, targetCursorRulesPath);
+          const cursorRulesContent = fs.readFileSync(cursorRulesPath, "utf8");
+          fs.writeFileSync(targetCursorRulesPath, cursorRulesContent);
           console.log(
-            `${pc.green("✓")} Added .cursorrules file for Cursor.ai integration`
+            `${pc.green(
+              "✓"
+            )} Added template-specific .cursorrules file for Cursor.ai integration`
           );
+        } else {
+          console.warn(`No .cursorrules file found for ${variant} template`);
         }
       } catch (error) {
-        console.warn("Failed to copy .cursorrules file:", error);
+        console.warn(
+          `Failed to copy .cursorrules file for ${variant} template:`,
+          error
+        );
       }
     } else {
       console.log(`${pc.yellow("⚠")} Adding .cursorrules file skipped`);
