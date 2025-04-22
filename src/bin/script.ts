@@ -6,18 +6,15 @@ import { cac } from "cac";
 import spawn from "cross-spawn";
 import pc from "picocolors";
 import prompts from "prompts";
+import type { StdioOptions } from "child_process";
 
 import { type Framework, frameworks } from "../frameworks.js";
 import {
-  copy,
   emptyDir,
   formatTargetDir,
   isEmpty,
-  isValidPackageName,
   pkgFromUserAgent,
-  toValidPackageName,
-  installDependencies,
-  updatePackageJson,
+  isValidPackageName,
 } from "../utils.js";
 
 const templates = frameworks
@@ -35,8 +32,9 @@ cli
   .option("--npm", "Use npm as your package manager")
   .option("--pnpm", "Use pnpm as your package manager")
   .option("--yarn", "Use yarn as your package manager")
+  .option("--bun", "Use bun as your package manager")
   .option("--tailwind", "Install TailwindCSS", { default: true })
-  .option("--shadcn", "Install Shadcn UI components");
+  .option("--shadcn", "Install Shadcn UI components", { default: true });
 
 const defaultTargetDir = "lasereyes-project";
 
@@ -46,6 +44,89 @@ const renameFiles: Record<string, string | undefined> = {
   _npmrc: ".npmrc",
 };
 
+interface PackageManagerCommands {
+  install: string[];
+  installDev: string[];
+  run: string[];
+  exec: string[];
+  create: string[];
+  execDirect: string[];
+}
+
+const packageManagersConfig: Record<string, PackageManagerCommands> = {
+  npm: {
+    install: ["install"],
+    installDev: ["install", "-D"],
+    run: ["run"],
+    exec: ["exec"],
+    create: ["create"],
+    execDirect: ["npx"],
+  },
+  yarn: {
+    install: ["add"],
+    installDev: ["add", "-D"],
+    run: ["run"],
+    exec: ["exec"],
+    create: ["create"],
+    execDirect: ["dlx"],
+  },
+  pnpm: {
+    install: ["add"],
+    installDev: ["add", "-D"],
+    run: ["run"],
+    exec: ["exec"],
+    create: ["create"],
+    execDirect: ["dlx"],
+  },
+  bun: {
+    install: ["add"],
+    installDev: ["add", "-d"],
+    run: ["run"],
+    exec: ["x"],
+    create: ["create"],
+    execDirect: ["x"],
+  },
+};
+
+function getPackageManager(options: any) {
+  // First try to detect from user agent
+  const userAgent = process.env.npm_config_user_agent;
+  const userAgentPkg = pkgFromUserAgent(userAgent);
+  
+  let detectedPM: string | undefined;
+  
+  if (userAgentPkg) {
+    const pkgName = userAgentPkg.name;
+    if (pkgName === "yarn") detectedPM = "yarn";
+    if (pkgName === "pnpm") detectedPM = "pnpm";
+    if (pkgName === "bun") detectedPM = "bun";
+    if (pkgName === "npm") detectedPM = "npm";
+  }
+
+  // Fall back to CLI options if no user agent or unrecognized
+  const cliPM = options.yarn ? "yarn" : 
+                options.pnpm ? "pnpm" : 
+                options.bun ? "bun" : "npm";
+
+  const finalPM = detectedPM || cliPM;
+  
+  console.log(`\nPackage Manager: ${finalPM} ${detectedPM ? '(detected from environment)' : '(from CLI options)'}`);
+  
+  if (process.env.DEBUG) {
+    console.log('Package Manager Detection Details:');
+    console.log('- User Agent:', userAgent);
+    console.log('- Detected from UA:', detectedPM);
+    console.log('- CLI Option:', cliPM);
+    console.log('- Final Choice:', finalPM);
+  }
+
+  return finalPM;
+}
+
+function getPackageManagerCommand(packageManager: string, commandType: keyof PackageManagerCommands) {
+  return packageManagersConfig[packageManager][commandType];
+}
+
 async function init() {
   const { args, options } = cli.parse(process.argv);
   if (options.help) return;
@@ -54,12 +135,11 @@ async function init() {
   const argTemplate = options.template || options.t;
 
   let targetDir = argTargetDir || defaultTargetDir;
+  const pkgManager = getPackageManager(options);
 
-  const getProjectName = () =>
-    targetDir === "." ? path.basename(path.resolve()) : targetDir;
-
+  // Gather all configuration upfront
   let result: prompts.Answers<
-    "framework" | "overwrite" | "projectName" | "variant" | "overwriteChecker"
+    "projectName" | "framework" | "variant" | "packageManager" | "addCursorRules" | "installShadcn" | "installTailwind" | "overwrite" | "overwriteChecker"
   >;
 
   try {
@@ -70,6 +150,13 @@ async function init() {
           name: "projectName",
           message: pc.reset("Project name:"),
           initial: defaultTargetDir,
+          validate: (input: string) => {
+            const validation = isValidPackageName(input);
+            if (validation) {
+              return true;
+            }
+            return "Invalid package.json name";
+          },
           onState: (state) => {
             targetDir = formatTargetDir(state.value) || defaultTargetDir;
           },
@@ -95,31 +182,25 @@ async function init() {
           name: "overwriteChecker",
         },
         {
-          type:
-            argTemplate && templates.includes(argTemplate) ? null : "select",
+          type: argTemplate && templates.includes(argTemplate) ? null : "select",
           name: "framework",
-          message:
-            typeof argTemplate === "string" && !templates.includes(argTemplate)
-              ? pc.reset(
-                  `"${argTemplate}" isn't a valid template. Please choose from below: `
-                )
-              : pc.reset("Select a framework:"),
+          message: pc.reset("Select a framework:"),
           initial: 0,
           choices: frameworks.map((framework) => {
             const frameworkColor = framework.color;
             return {
               title: frameworkColor(framework.display || framework.name),
               value: framework,
+              disabled: framework.disabled,
             };
           }),
         },
         {
           type: (framework: Framework) =>
-            framework?.variants && framework.variants.length > 0
-              ? "select"
-              : null,
+            framework?.variants && framework.variants.length > 0 ? "select" : null,
           name: "variant",
           message: pc.reset("Select a variant:"),
+          initial: 0,
           choices: (framework: Framework) => {
             if (!framework?.variants) return [];
             return framework.variants.map((variant) => {
@@ -127,9 +208,40 @@ async function init() {
               return {
                 title: variantColor(variant.display || variant.name),
                 value: variant.name,
+                disabled: variant.disabled,
               };
             });
           },
+        },
+        {
+          type: "select",
+          name: "packageManager",
+          message: pc.reset("Select a package manager:"),
+          initial: pkgManager === "npm" ? 0 : pkgManager === "yarn" ? 1 : pkgManager === "pnpm" ? 2 : 3,
+          choices: [
+            { title: "npm", value: "npm" },
+            { title: "yarn", value: "yarn" },
+            { title: "pnpm", value: "pnpm" },
+            { title: "bun", value: "bun" },
+          ],
+        },
+        {
+          type: "confirm",
+          name: "installTailwind",
+          message: pc.reset("Would you like to install TailwindCSS?"),
+          initial: true,
+        },
+        {
+          type: "confirm",
+          name: "installShadcn",
+          message: pc.reset("Would you like to install Shadcn UI components?"),
+          initial: true,
+        },
+        {
+          type: "confirm",
+          name: "addCursorRules",
+          message: pc.reset("Would you like to add LaserEyes-specific .cursorrules file?"),
+          initial: true,
         },
       ],
       {
@@ -143,16 +255,29 @@ async function init() {
     return;
   }
 
-  const { framework, overwrite, variant } = result;
+  const { framework, overwrite, variant, packageManager, installTailwind, installShadcn, addCursorRules } = result;
   const root = path.join(process.cwd(), targetDir);
 
   if (overwrite) {
     emptyDir(root);
   }
 
+  // Display summary of choices
+  console.log("\nProject Configuration Summary:");
+  console.log(`${pc.green("✓")} Project Name: ${targetDir}`);
+  console.log(`${pc.green("✓")} Framework: ${framework.display}`);
+  console.log(`${pc.green("✓")} Variant: ${variant}`);
+  console.log(`${pc.green("✓")} Package Manager: ${packageManager}`);
+  console.log(`${pc.green("✓")} TailwindCSS: ${installTailwind ? "Yes" : "No"}`);
+  console.log(`${pc.green("✓")} Shadcn UI: ${installShadcn ? "Yes" : "No"}`);
+  console.log(`${pc.green("✓")} Cursor Rules: ${addCursorRules ? "Yes" : "No"}\n`);
+
+  // Continue with the rest of the setup using the gathered configuration
   if (variant === "next-app") {
     console.log("\nCreating new Next.js app...");
-    // Set environment variables to suppress npm output
+    const projectName = path.basename(targetDir);
+    const tempDir = path.join(process.cwd(), ".temp-next-app");
+    
     const env = {
       ...process.env,
       npm_config_loglevel: "error",
@@ -161,56 +286,68 @@ async function init() {
       npm_config_update_notifier: "false",
       NEXT_TELEMETRY_DISABLED: "1",
       NEXT_PRIVATE_SKIP_SETUP: "1",
+      FORCE_COLOR: "0",
+      CI: "1",
     };
-
-    await executeCommand(
-      "npx",
-      [
-        "--quiet",
-        "create-next-app@14.2.3",
-        targetDir,
-        "--typescript",
-        "--tailwind",
-        "--eslint",
-        "--app",
-        "--src-dir",
-        "--import-alias",
-        "@/*",
-        "--no-git",
-        "--use-npm",
-        "--no-turbo",
-        "--use-react=18",
-        "--no-dependencies",
-        "--quiet",
-        "--skip-instructions",
-      ],
-      { env },
-      true
-    );
-
-    const templateDir = path.resolve(
-      fileURLToPath(import.meta.url),
-      "..",
-      "..",
-      "..",
-      "templates",
-      variant
-    );
-
-    console.log("\nCustomizing template...");
-    const filesToCopy = [
-      "src/app/page.tsx",
-      "src/app/layout.tsx",
-      "src/components/DefaultLayout.tsx",
-      "src/components/ConnectWallet.tsx",
-      "src/components/ThemeToggle.tsx",
+  
+    const commonFlags = [
+      "--ts",
+      "--eslint",
+      "--app",
+      "--src-dir",
+      "--import-alias", "@/*",
+      "--no-git",
+      "--yes"
     ];
+  
+    try {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+      fs.mkdirSync(tempDir);
+  
+      const projectPath = path.join(tempDir, projectName);
+      fs.mkdirSync(projectPath);
 
-    for (const file of filesToCopy) {
-      const srcFile = path.join(templateDir, file);
-      const destFile = path.join(root, file);
+      let args: string[];
+      let execCommand: string[];
+  
+      if (packageManager === "bun") {
+        execCommand = ["bun"];
+        args = ["create", "next-app@14", ".", ...commonFlags];
+      } else if (packageManager === "yarn") {
+        // For yarn, use npx with --use-yarn flag
+        execCommand = ["npx"];
+        args = ["create-next-app@14", ".", "--use-yarn", ...commonFlags];
+      } else if (packageManager === "pnpm") {
+        execCommand = ["pnpm", "dlx"];
+        args = ["create-next-app@14", ".", ...commonFlags];
+      } else {
+        execCommand = ["npx"];
+        args = ["create-next-app@14", ".", ...commonFlags];
+      }
+  
+      console.log(`\nCreating Next.js app using ${packageManager}...`);
+      await executeCommand(execCommand[0], execCommand.slice(1).concat(args), { cwd: projectPath, env }, true);
 
-      try {
+      fs.renameSync(projectPath, targetDir);
+      fs.rmSync(tempDir, { recursive: true, force: true });
+  
+      console.log(`\n${pc.green("✔")} Created Next.js app at ${targetDir}`);
+  
+      // Copy template files
+      const templateDir = path.resolve(fileURLToPath(import.meta.url), "..", "..", "..", "templates", variant);
+      const filesToCopy = [
+        "src/app/page.tsx",
+        "src/app/layout.tsx",
+        "src/components/DefaultLayout.tsx",
+        "src/components/ConnectWallet.tsx",
+        "src/components/ThemeToggle.tsx",
+      ];
+      console.log("\nCustomizing template...");
+      for (const file of filesToCopy) {
+        const srcFile = path.join(templateDir, file);
+        const destFile = path.join(targetDir, file);
         fs.mkdirSync(path.dirname(destFile), { recursive: true });
         if (fs.existsSync(srcFile)) {
           fs.copyFileSync(srcFile, destFile);
@@ -218,254 +355,210 @@ async function init() {
         } else {
           console.warn(`Template file not found: ${file}`);
         }
-      } catch (error) {
-        console.warn(`Failed to copy template file ${file}:`, error);
       }
-    }
-
-    console.log("\nInstalling @omnisat/lasereyes...");
-    try {
-      await executeCommand(
-        "npm",
-        [
-          "install",
-          "@omnisat/lasereyes@latest",
-          "--save",
-          "--no-fund",
-          "--no-audit",
-          "--loglevel=error",
-        ],
-        { cwd: root },
-        true
-      );
+  
+      // Install LaserEyes
+      console.log("\nInstalling @omnisat/lasereyes...");
+      await executeCommand(packageManager, getPackageManagerCommand(packageManager, "install").concat("@omnisat/lasereyes@latest"), { cwd: targetDir }, true);
       console.log(`${pc.green("✓")} @omnisat/lasereyes installed!\n`);
-    } catch (error) {
-      console.error("Failed to install @omnisat/lasereyes:", error);
-      throw error;
-    }
-
-    // Ask about cursor rules
-    const cursorResult = await prompts(
-      {
-        type: "confirm",
-        name: "addCursorRules",
-        message:
-          "🤖 Using Cursor.ai?\nWould you like to add LaserEyes-specific .cursorrules file?",
-        initial: true,
-      },
-      {
-        onCancel: () => {
-          throw new Error(`${pc.red("✖")} Operation cancelled`);
-        },
-      }
-    );
-
-    if (cursorResult.addCursorRules) {
-      console.log("\nAdding .cursorrules file...");
-      try {
-        const cursorRulesPath = path.join(templateDir, ".cursorrules");
-        const targetCursorRulesPath = path.join(root, ".cursorrules");
-
-        if (fs.existsSync(cursorRulesPath)) {
-          const cursorRulesContent = fs.readFileSync(cursorRulesPath, "utf8");
-          fs.writeFileSync(targetCursorRulesPath, cursorRulesContent);
-          console.log(
-            `${pc.green(
-              "✓"
-            )} Added template-specific .cursorrules file for Cursor.ai integration`
-          );
+  
+      // Add Cursor rules if selected
+      if (addCursorRules) {
+        console.log("\nAdding .cursorrules file...");
+        const src = path.join(templateDir, ".cursorrules");
+        const dest = path.join(targetDir, ".cursorrules");
+        if (fs.existsSync(src)) {
+          fs.copyFileSync(src, dest);
+          console.log(`${pc.green("✓")} Added .cursorrules`);
         } else {
-          console.warn(`No .cursorrules file found for ${variant} template`);
+          console.warn(`.cursorrules not found in template`);
         }
-      } catch (error) {
-        console.warn(
-          `Failed to copy .cursorrules file for ${variant} template:`,
-          error
-        );
       }
-    } else {
-      console.log(`${pc.yellow("⚠")} Adding .cursorrules file skipped`);
-    }
+  
+      // Install next-themes
+      console.log("\nInstalling next-themes...");
+      await executeCommand(packageManager, getPackageManagerCommand(packageManager, "install").concat("next-themes"), { cwd: targetDir }, true);
+      console.log(`${pc.green("✓")} next-themes installed`);
+  
+      if (installShadcn) {
+        console.log("\nInitializing Shadcn...");
 
-    console.log("\nInstalling next-themes...");
-    await executeCommand(
-      "npm",
-      [
-        "install",
-        "next-themes",
-        "--save",
-        "--no-fund",
-        "--no-audit",
-        "--loglevel=error",
-      ],
-      {
-        cwd: root,
-      },
-      true
-    );
-    console.log(`${pc.green("✓")} next-themes installed!`);
+        const isYarnV1 =
+          packageManager === "yarn" &&
+          process.env.npm_config_user_agent?.includes("yarn/1");
 
-    console.log("\nInitializing Shadcn...");
-    try {
-      await executeCommand(
-        "npx",
-        ["shadcn@latest", "init", "-d"],
-        {
-          cwd: root,
-          env: {
-            SKIP_INSTRUCTIONS: "1",
-          },
-        },
-        true
-      );
-      console.log(`${pc.green("✓")} Shadcn initialized successfully!`);
+        const runShadcnCommand = async (...args: string[]) => {
+          if (packageManager === "npm") {
+            await executeCommand(
+              "npx",
+              ["shadcn@2.3", ...args],
+              {
+                cwd: targetDir,
+                env: {
+                  ...env,
+                  SKIP_INSTRUCTIONS: "1",
+                },
+              },
+              true
+            );
+          } else if (isYarnV1) {
+            await executeCommand(
+              "npx",
+              ["shadcn@2.3", ...args],
+              {
+                cwd: targetDir,
+                env: {
+                  ...env,
+                  SKIP_INSTRUCTIONS: "1",
+                },
+              },
+              true
+            );
+          } else {
+            const execDirect = getPackageManagerCommand(packageManager, "execDirect");
+            await executeCommand(
+              packageManager,
+              [...execDirect, "shadcn@2.3", ...args],
+              {
+                cwd: targetDir,
+                env: {
+                  ...env,
+                  SKIP_INSTRUCTIONS: "1",
+                },
+              },
+              true
+            );
+          }
+        };
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+        try {
+          // First run init with defaults
+          await runShadcnCommand("init", "--yes", "--defaults");
+          console.log(`${pc.green("✓")} Shadcn initialized successfully!`);
 
-      // Add the button component
-      console.log("\nAdding button component...");
-      await executeCommand(
-        "npx",
-        ["shadcn@latest", "add", "button"],
-        {
-          cwd: root,
-          env: {
-            SKIP_INSTRUCTIONS: "1",
-          },
-        },
-        true
-      );
-      console.log(`${pc.green("✓")} Button component installed!`);
-
-      // Add the dropdown-menu component
-      console.log("\nAdding dropdown-menu component...");
-      await executeCommand(
-        "npx",
-        ["shadcn@latest", "add", "dropdown-menu"],
-        {
-          cwd: root,
-          env: {
-            SKIP_INSTRUCTIONS: "1",
-          },
-        },
-        true
-      );
-      console.log(`${pc.green("✓")} Dropdown menu component installed!`);
-
-      // Add the dialog component
-      console.log("\nAdding dialog component...");
-      await executeCommand(
-        "npx",
-        ["shadcn@latest", "add", "dialog"],
-        {
-          cwd: root,
-          env: {
-            SKIP_INSTRUCTIONS: "1",
-          },
-        },
-        true
-      );
-      console.log(`${pc.green("✓")} Dialog component installed!`);
+          // Then add components one by one
+          const components = ["button", "dropdown-menu", "dialog"];
+          for (const component of components) {
+            console.log(`\nAdding ${component} component...`);
+            await runShadcnCommand("add", component, "--yes");
+            console.log(`${pc.green("✓")} ${component} installed`);
+          }
+        } catch (error) {
+          console.error(`${pc.red("✖")} Failed to initialize Shadcn:`, error);
+          throw error;
+        }
+      }
+  
+      console.log(`\n${pc.green("✨")} Success! Created ${targetDir}\n`);
+      console.log("Next steps:\n");
+      console.log(`  cd ${path.relative(process.cwd(), targetDir)}`);
+      console.log(`  ${packageManager} run dev\n`);
+      console.log("Happy Building! 🤝");
     } catch (error) {
-      console.error("Failed to initialize shadcn/ui:", error);
-      throw error;
+      console.error(`\n${pc.red("✖")} Failed to create Next.js app:`, error);
+      // Clean up on error
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+      process.exit(1);
     }
-
-    console.log(
-      `\n${pc.green("✨")} Success! Created ${targetDir} at ${root}\n`
-    );
-    console.log("Happy Building! 🤝");
-    console.log(targetDir);
   } else if (variant === "vue-app") {
-    console.log("\nCreating new Vue app...");
-    await executeCommand(
-      "npm",
-      ["create", "vite@latest", targetDir, "--", "--template", "vue-ts"],
-      {}
-    );
-
-    // Install @omnisat/lasereyes-vue
-    console.log("\nInstalling @omnisat/lasereyes-vue...");
     try {
+      console.log("\nCreating new Vue app...");
+      const createCmd = getPackageManagerCommand(packageManager, "create");
+      
       await executeCommand(
-        "npm",
+        packageManager,
         [
-          "install",
-          "@omnisat/lasereyes-vue@latest",
-          "--save",
-          "--no-fund",
-          "--no-audit",
-          "--loglevel=error",
+          ...createCmd,
+          "vite@latest",
+          targetDir,
+          "--",
+          "--template",
+          "vue-ts",
         ],
+        {}
+      );
+
+      // Install @omnisat/lasereyes-vue
+      console.log("\nInstalling @omnisat/lasereyes-vue...");
+      const installCmd = getPackageManagerCommand(packageManager, "install");
+      await executeCommand(
+        packageManager,
+        [...installCmd, "@omnisat/lasereyes-vue@latest"],
         { cwd: root },
         true
       );
       console.log(`${pc.green("✓")} @omnisat/lasereyes-vue installed!`);
-    } catch (error) {
-      console.error("Failed to install @omnisat/lasereyes-vue:", error);
-      throw error;
-    }
 
-    const templateDir = path.resolve(
-      fileURLToPath(import.meta.url),
-      "..",
-      "..",
-      "..",
-      "templates",
-      variant
-    );
+      const templateDir = path.resolve(
+        fileURLToPath(import.meta.url),
+        "..",
+        "..",
+        "..",
+        "templates",
+        variant
+      );
 
-    // Copy template files - removed TailwindCSS related files
-    console.log("\nCustomizing template...");
-    const filesToCopy = [
-      "src/App.vue",
-      "src/main.ts",
-      "src/style.css",
-      "vite.config.ts",
-    ];
+      // Copy template files - removed TailwindCSS related files
+      console.log("\nCustomizing template...");
+      const filesToCopy = [
+        "src/App.vue",
+        "src/main.ts",
+        "src/style.css",
+        "vite.config.ts",
+      ];
 
-    for (const file of filesToCopy) {
-      const srcFile = path.join(templateDir, file);
-      const destFile = path.join(root, file);
+      for (const file of filesToCopy) {
+        const srcFile = path.join(templateDir, file);
+        const destFile = path.join(root, file);
 
-      try {
-        fs.mkdirSync(path.dirname(destFile), { recursive: true });
-        if (fs.existsSync(srcFile)) {
-          fs.copyFileSync(srcFile, destFile);
-          console.log(`${pc.green("✓")} Created ${file}`);
-        } else {
-          console.warn(`Template file not found: ${file}`);
+        try {
+          fs.mkdirSync(path.dirname(destFile), { recursive: true });
+          if (fs.existsSync(srcFile)) {
+            fs.copyFileSync(srcFile, destFile);
+            console.log(`${pc.green("✓")} Created ${file}`);
+          } else {
+            console.warn(`Template file not found: ${file}`);
+          }
+        } catch (error) {
+          console.warn(`Failed to copy template file ${file}:`, error);
         }
-      } catch (error) {
-        console.warn(`Failed to copy template file ${file}:`, error);
       }
+    } catch (error) {
+      console.error(`\n${pc.red("✖")} Failed to create Vue app:`, error);
+      process.exit(1);
     }
   }
-
-  const pkgManager = options.yarn ? "yarn" : options.pnpm ? "pnpm" : "npm";
 
   console.log(`\nDone. Now run:\n`);
   if (root !== process.cwd()) {
     console.log(`  cd ${path.relative(process.cwd(), root)}`);
   }
-  console.log(`  ${pkgManager} run dev`);
+  const runCmd = getPackageManagerCommand(packageManager, "run");
+  console.log(`  ${packageManager} ${runCmd.join(" ")} dev`);
   console.log();
 }
 
 function executeCommand(
   command: string,
   args: string[],
-  options: any,
+  options: {
+    cwd?: string;
+    env?: Record<string, string | undefined>;
+    args?: string[];
+  } = {},
   silent = false
 ) {
   return new Promise<void>((resolve, reject) => {
+    const finalArgs = options.args ? [...args, ...options.args] : args;
     const spawnOptions = {
-      ...options,
-      stdio: silent ? "pipe" : "inherit",
+      cwd: options.cwd,
+      stdio: (silent ? "pipe" : "inherit") as StdioOptions,
       env: {
         ...process.env,
         ...options.env,
-        npm_config_loglevel: "silent",
+        npm_config_loglevel: silent ? "silent" : "info",
         npm_config_fund: "false",
         npm_config_audit: "false",
         npm_config_update_notifier: "false",
@@ -483,13 +576,16 @@ function executeCommand(
     const dots = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"];
     let i = 0;
 
-    loadingInterval = setInterval(() => {
-      process.stdout.write(`\r${dots[i]}`);
-      i = (i + 1) % dots.length;
-    }, 80);
+    if (silent) {
+      loadingInterval = setInterval(() => {
+        process.stdout.write(`\r${dots[i]}`);
+        i = (i + 1) % dots.length;
+      }, 80);
+    }
 
-    const child = spawn(command, args, spawnOptions);
+    const child = spawn(command, finalArgs, spawnOptions);
     let stderrOutput = "";
+    let stdoutOutput = "";
 
     if (silent) {
       if (child.stderr) {
@@ -502,8 +598,8 @@ function executeCommand(
       }
 
       if (child.stdout) {
-        child.stdout.on("data", () => {
-          // Intentionally empty to suppress output
+        child.stdout.on("data", (data) => {
+          stdoutOutput += data.toString();
         });
       }
     }
@@ -517,9 +613,10 @@ function executeCommand(
 
       if (code !== 0) {
         if (silent && stderrOutput) {
+          console.error(`\nError running ${command} ${finalArgs.join(" ")}:`);
           console.error(stderrOutput);
         }
-        reject(new Error(`${command} ${args.join(" ")} failed`));
+        reject(new Error(`${command} ${finalArgs.join(" ")} failed with code ${code}`));
         return;
       }
       resolve();
