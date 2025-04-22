@@ -5,6 +5,7 @@ export interface Variant {
   display: string;
   color: (str: string) => string;
   customCommand?: string;
+  disabled?: boolean;
 }
 
 export interface Framework {
