@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
-
 import {
   LEATHER,
   MAGIC_EDEN,
@@ -27,7 +26,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-
 export default function ConnectWallet({ className }: { className?: string }) {
   const {
     connect,
@@ -47,7 +45,6 @@ export default function ConnectWallet({ className }: { className?: string }) {
     hasOpNet,
   } = useLaserEyes();
   const [isOpen, setIsOpen] = useState(false);
-
   const hasWallet = {
     unisat: hasUnisat,
     xverse: hasXverse,
@@ -60,7 +57,6 @@ export default function ConnectWallet({ className }: { className?: string }) {
     wizz: hasWizz,
     orange: hasOrange,
   };
-
   const handleConnect = async (
     walletName:
       | typeof UNISAT
@@ -80,23 +76,9 @@ export default function ConnectWallet({ className }: { className?: string }) {
       await connect(walletName as never);
     }
   };
-
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      {address ? (
-        <Button
-          onClick={() => disconnect()}
-          className={cn(
-            "mb-4 text-black dark:text-white font-bold py-6 px-12 rounded-lg",
-            "transition duration-300",
-            "bg-white dark:bg-gray-800",
-            "hover:bg-gray-900 hover:text-white dark:hover:bg-gray-700",
-            className
-          )}
-        >
-          Disconnect
-        </Button>
-      ) : (
+      {!address ? (
         <DialogTrigger asChild>
           <Button
             className={cn(
@@ -110,7 +92,7 @@ export default function ConnectWallet({ className }: { className?: string }) {
             {isConnecting ? "Connecting..." : "Connect Wallet"}
           </Button>
         </DialogTrigger>
-      )}
+      ) : null}
       <DialogContent
         className={cn(
           "bg-white dark:bg-gray-900 border-none",
@@ -125,7 +107,6 @@ export default function ConnectWallet({ className }: { className?: string }) {
             Connect Wallet
           </DialogTitle>
         </DialogHeader>
-
         <div className="flex-1 overflow-y-auto scrollbar-hide px-6">
           <DialogDescription className="flex flex-col gap-2 w-full">
             {Object.values(SUPPORTED_WALLETS).map((wallet) => {
@@ -198,7 +179,6 @@ export default function ConnectWallet({ className }: { className?: string }) {
             })}
           </DialogDescription>
         </div>
-
         <div className="w-full bg-gray-50 dark:bg-gray-900 p-4 pt-5 border-t border-gray-200 dark:border-gray-800 group relative">
           <div className="text-gray-500 dark:text-gray-400 text-sm text-center transition-opacity duration-300 ease-in-out opacity-100 group-hover:opacity-0">
             <a

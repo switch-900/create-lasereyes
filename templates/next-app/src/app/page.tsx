@@ -2,22 +2,23 @@
 import { useLaserEyes, LaserEyesLogo } from "@omnisat/lasereyes";
 import ConnectWallet from "@/components/ConnectWallet";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import InscriptionsList from "@/components/InscriptionsList";
 import { useState, useEffect } from "react";
-
 export default function Home() {
   const { address } = useLaserEyes();
-
-  const [isMounted, setIsMounted] = useState<boolean>(false)
-
+  const [isMounted, setIsMounted] = useState<boolean>(false);
   useEffect(() => {
-    setIsMounted(true)
-  }, [])
-
-  if (!isMounted) return null
-
+    setIsMounted(true);
+  }, []);
+  if (!isMounted) return null;
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-12 p-8 bg-gradient-to-br from-red-50 via-orange-50 to-yellow-50 dark:from-gray-900 dark:to-black text-black dark:text-white">
-      <div className="absolute top-4 right-4">
+      <div className="absolute top-4 right-4 flex items-center gap-4">
+        {address ? (
+          <InscriptionsList walletAddress={address} />
+        ) : (
+          <ConnectWallet className="m-0" />
+        )}
         <ThemeToggle />
       </div>
       <div className="flex flex-col items-center gap-8">
@@ -27,17 +28,6 @@ export default function Home() {
             ? "Welcome To Create LaserEyes."
             : "Welcome To The New Way Of Building."}
         </h1>
-      </div>
-      <div className="flex flex-col items-center gap-6">
-        <ConnectWallet />
-        {address && (
-          <div className="flex flex-col gap-2">
-            <p className="text-lg text-center text-black dark:text-gray-300">
-              Connected Address:{" "}
-              <span className="font-mono text-orange-400">{address}</span>
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );
